@@ -18,21 +18,27 @@ flowchart TD
     Valid -->|Yes| Submit["Submit Request<br/>Status: SUBMITTED"]
     Submit -.->|"Requester cancels before decision"| Cancel["Status: CANCELLED"] --> Closed1(["Request Closed"])
     Submit --> Appr1[["Approval Routing + Escalation<br/>(Diagram 2)"]]
-    Appr1 -->|"Returned for correction"| Corr["Add correction comments<br/>Notify requester"] --> Upd["Requester updates request"] --> Submit
-    Appr1 -->|"Rejected or timed out"| Rej["Record reason<br/>Status: REJECTED<br/>Notify requester"] --> Closed1
+    Appr1 -->|"Returned for correction"| Corr["Category, comment, fields to update,<br/>resubmit-by date<br/>Status: RETURNED - Needs correction"] --> Upd["Requester updates request"] --> Submit
+    Appr1 -->|"Rejected or timed out"| Rej["Category + comment<br/>Status: REJECTED<br/>Rejection email to requester"] --> Closed1
     Appr1 -->|Approved| Approved["Status: APPROVED"]
 
     %% ---------- Manual VM creation by vCloud admins ----------
-    Approved --> Queue["Add to vCloud creation queue<br/>Notify vCloud team"]
+    Approved --> Kind{"New VM or existing VM?"}
+    Kind -->|"Existing VM offered by approver"| HQueue["Handover task in vCloud queue<br/>Current owner notified"]
+    HQueue --> Reset["vCloud admin resets access by hand<br/>in the vCloud dashboard"]
+    Reset --> Handed["Ownership moves to requester<br/>E = handover date + lease<br/>Status: COMPLETED"]
+    Handed --> Active
+    Kind -->|"New VM"| Queue["Add to vCloud creation queue<br/>Notify vCloud team"]
     VD -.->|"works the queue"| Queue
     Queue --> Assign["Assign request to engineer"]
     Assign --> Feas["Technical and capacity validation"]
     Feas --> FeasD{"Can it be created?"}
     FeasD -->|"More information required"| MoreInfo["Request additional information<br/>Notify requester and manager"] --> InfoGiven["Requester provides information"] --> Feas
-    FeasD -->|No| TechRej["Record technical rejection"] --> NotifyFail["Notify requester and manager"] --> Closed2(["Request Closed"])
+    FeasD -->|No| TechRej["Record failure category,<br/>resources short, details"] --> NotifyFail["Notify requester and manager"] --> Closed2(["Request Closed"])
     FeasD -->|Yes| CStart["Engineer marks it started<br/>Status: CREATION_IN_PROGRESS"]
     CStart --> Manual["Engineer creates the VM by hand<br/>in the vCloud dashboard"]
     Manual --> Created{"VM created?"}
+    Created -->|"Not yet: waiting on capacity or network"| Hold["On hold: reason + expected date<br/>Requester notified"] --> Manual
     Created -->|"No: cannot be created"| TechRej
     Created -->|Yes| Record["Engineer enters VM details in the portal<br/>hostname, IP, specs, actual creation date"]
     Record --> SetExp["Set owner and expiry<br/>E = actual creation date + lease"]
@@ -79,4 +85,4 @@ flowchart TD
     classDef new fill:#dff5e3,stroke:#2e7d32,color:#1b3d20
     classDef sub fill:#fff4d6,stroke:#b7791f,color:#5c3d00
     class Auth,Appr1,Appr2 sub
-    class CStart,Manual,Created,Record,ForEmp,Cancel,Monitor,Due,Notice,Expired,Grace,GraceAct,Final,ExtForm,ExtRej,Resume,ExtUpd,Confirm,DelReq,RetD,Decom new
+    class Kind,HQueue,Reset,Handed,Hold,TechRej,Corr,Rej,CStart,Manual,Created,Record,ForEmp,Cancel,Monitor,Due,Notice,Expired,Grace,GraceAct,Final,ExtForm,ExtRej,Resume,ExtUpd,Confirm,DelReq,RetD,Decom new

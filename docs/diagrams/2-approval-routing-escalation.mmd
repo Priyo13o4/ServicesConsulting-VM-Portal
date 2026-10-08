@@ -19,11 +19,12 @@ flowchart TD
     Resolve -->|"No manager on record,<br/>approver deactivated,<br/>or approver = requester"| FB["Route to fallback:<br/>owner-BU manager group<br/>(group empty: vCloud admin)"] --> Pend
 
     Pend["Status: PENDING_APPROVAL<br/>Notify approver, start SLA clock"] --> Dec{"Decision"}
-    Dec -->|Approve| More{"More steps in chain?"}
+    Dec -->|"Approve"| More{"More steps in chain?"}
+    Dec -->|"Approve with existing VM"| Offer["Pick a similar VM from the panel<br/>Current owner notified"] --> More
     More -->|Yes| Step
     More -->|No| OK
-    Dec -->|Reject| NO(["REJECTED"])
-    Dec -->|"Return for correction"| RET(["RETURNED to requester"])
+    Dec -->|Reject| NO(["REJECTED<br/>category + comment"])
+    Dec -->|"Return for correction"| RET(["RETURNED to requester<br/>category, comment, fields, resubmit-by"])
 
     %% ---------- Manager not available ----------
     Dec -->|"No decision"| R1["Business day 2:<br/>Reminder to approver"]
@@ -36,4 +37,4 @@ flowchart TD
     TO -->|EXTEND| TOE(["Treated as REJECTED:<br/>notices resume"])
 
     classDef new fill:#dff5e3,stroke:#2e7d32,color:#1b3d20
-    class Resolve,Deleg,FB,R1,R2,R3,TO,TOC,TOE new
+    class Offer,Resolve,Deleg,FB,R1,R2,R3,TO,TOC,TOE new

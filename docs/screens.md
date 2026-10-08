@@ -31,10 +31,10 @@ Signed-out users hitting any portal page are redirected to `/login` (optimistic 
 | `/dashboard` | All | Role-based cards: my VMs expiring soon, my open requests; managers: pending approvals + team confirmations; admins: queue counts | Links into each list | 1 |
 | `/requests/new` | All | Request form; profile fields read-only; "on behalf of" for managers | Submit | 1 |
 | `/requests` | All | My requests with status | Open one | 1 |
-| `/requests/[id]` | Requester, approvers, owner-BU, admin | Details, approval chain, timeline (status changes + comments) | Edit (when `RETURNED`), cancel, comment; approver: decide; admin: queue actions | 1 |
-| `/vms` | All (scoped) | VMs with status, expiry, owner; managers toggle Mine / Team; owner-BU and admin see all with BU filter | Open one, CSV export | 1 |
+| `/requests/[id]` | Requester, approvers, owner-BU, admin | Details, approval chain, timeline (status changes + comments). When `RETURNED`: "Needs correction", the comment, resubmit-by date, and the fields to update highlighted. On hold: reason and expected date | Edit (when `RETURNED`), cancel, comment; approver: decide; admin: queue actions | 1 |
+| `/vms` | All (scoped) | VMs with status, expiry, owner, "available for reuse" badge; managers toggle Mine / Team; owner-BU and admin see all with BU filter; filter "Available for reuse" | Open one, CSV export, mark available for reuse | 1 |
 | `/vms/[id]` | Owner, backup owner, manager, owner-BU, admin | Details, expiry, access note, history | Admin: update details, transfer owner. Phase 2: extend, release | 1 |
-| `/approvals` | MANAGER, OWNER_BU_MANAGER, VCLOUD_ADMIN | Pending approvals assigned to me | Approve / reject / return (approval screen fields in `docs/domain.md`) | 1 |
+| `/approvals` | MANAGER, OWNER_BU_MANAGER, VCLOUD_ADMIN | Pending approvals assigned to me. On each request: a "Similar VMs in your team" panel (hostname, owner, specs vs requested, environment, OS, expiry, reuse badge) | Approve, approve with an existing VM, reject (category + comment), return (category, comment, fields to update, resubmit-by) | 1 |
 | `/team` | MANAGER, OWNER_BU_MANAGER | My reports; pending "confirm team member" requests | Confirm, "not my report" | 1 |
 | `/profile` | All | My details (read-only: email, employee ID, BU, manager) | Change password. Phase 2: out-of-office delegate | 1 |
 
@@ -42,7 +42,7 @@ Signed-out users hitting any portal page are redirected to `/login` (optimistic 
 
 | Route | Shows | Actions | Phase |
 |---|---|---|---|
-| `/admin/queue` | Creation queue: `APPROVED`, `CREATION_IN_PROGRESS`. VMs are created by hand in the vCloud dashboard | Assign, mark started, request info, reject, complete with VM details | 1 |
+| `/admin/queue` | Queue: `APPROVED`, `CREATION_IN_PROGRESS`, each marked Create or Handover, with on-hold badge. All VM work is done by hand in the vCloud dashboard | Assign, mark started, put on hold / clear hold, request info, reject (failure category + details), complete with VM details, complete handover | 1 |
 | `/admin/users` | Tabs: All users, Activation queue | Invite, import CSV, activate, change role, change manager/BU, deactivate (with VM transfer), reactivate, resend invite | 1 |
 | `/admin/approvals` | All pending approvals with age | Reassign (reason required) | 1 |
 | `/admin/vms/import` | CSV upload with per-row validation results | Import | 1 |
