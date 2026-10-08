@@ -58,42 +58,43 @@ Conventions:
 
 | Operation | Who | Input | Result / transition |
 |---|---|---|---|
-| `decideApproval` | The step's current approver (direct, delegate or fallback) | requestId, decision (`APPROVE` \| `APPROVE_WITH_EXISTING_VM` \| `REJECT` \| `RETURN`), comment, confirmations {businessNeed, sizeJustified} (both required for either approve), offeredVmId (`APPROVE_WITH_EXISTING_VM`; vmCount must be 1), category (required for REJECT and RETURN), fieldsToUpdate + resubmitBy? (RETURN) | Approve → next step or `APPROVED` (fulfilment `NEW_VM` or `EXISTING_VM`); REJECT → `REJECTED` + rejection email; RETURN → `RETURNED` ("Needs correction") |
+| `decideApproval` | The step's current approver (direct, delegate or fallback) | requestId, decision (`APPROVE` \| `APPROVE_WITH_EXISTING_VM` \| `REJECT` \| `RETURN`), comment, confirmations {businessNeed, sizeJustified} (both required for either approve), offeredVmId (`APPROVE_WITH_EXISTING_VM`; vmCount must be 1), category (required for REJECT and RETURN), fieldsToUpdate + resubmitBy? (RETURN) | Approve → next step or `APPROVED` (fulfilment `NEW_VM` or `EXISTING_VM`); optional approvedDurationDays ≤ requested; REJECT → `REJECTED` + rejection email; RETURN → `RETURNED` ("Needs correction") |
 | `listReuseCandidates` (query) | The request's current approver | requestId | Similar VMs: marked available for reuse in the approver's scope, plus the approver's own (rule in `docs/domain.md`) |
 | `reassignApproval` | VCLOUD_ADMIN | approvalId, approverId, reason | Approval re-routed (`routed_via = REASSIGNED`) |
 | `listMyApprovals` (query) | MANAGER, OWNER_BU_MANAGER, VCLOUD_ADMIN | — | Pending approvals assigned to the caller |
 
 ## queue (vCloud admins)
 
-All VM work is done by hand in the vCloud dashboard; these operations record it. Queue items are requests (CREATE, RENEW, DELETE), urgent follow-ups and support tickets.
+All VM work is done by hand in the vCloud dashboard; these operations record it. Queue items are requests (CREATE, EXTEND, DELETE), power-off tasks (Phase 2), urgent follow-ups and support tickets.
 
 | Operation | Who | Input | Result / transition |
 |---|---|---|---|
-| `listQueue` (query) | VCLOUD_ADMIN | filters: kind, assignee (me / unassigned / anyone), priority | Items with kind (Create, Handover, Renew, Delete, Escalated, Ticket), priority, assignee |
+| `listQueue` (query) | VCLOUD_ADMIN | filters: kind, assignee (me / unassigned / anyone), priority | Items with kind (Create, Handover, Extend, Power off, Delete, Escalated, Ticket), priority, assignee |
 | `assignToMe` | VCLOUD_ADMIN | itemType, itemId | Sets assignee to caller; `CONFLICT` if someone else holds it |
 | `takeOver` | VCLOUD_ADMIN | itemType, itemId, reason | Reassigns to caller; previous assignee notified; audited |
 | `approveOnBehalf` | VCLOUD_ADMIN | requestId, reason | Escalated request: `PENDING_APPROVAL` → `APPROVED` (`routed_via = VCLOUD_OVERRIDE`); manager and requester notified |
 | `declineFollowUp` | VCLOUD_ADMIN | requestId, comment | Clears the escalation flag; requester notified; stays with the manager |
 | `startWork` | VCLOUD_ADMIN | requestId | `APPROVED` → `CREATION_IN_PROGRESS` ("In progress") |
 | `rejectRequest` | VCLOUD_ADMIN | requestId, comment | `APPROVED` \| `CREATION_IN_PROGRESS` → `REJECTED` (cannot be done) |
-| `completeCreation` | VCLOUD_ADMIN | requestId, vms[{vappId \| newVapp{name, vcloudRef?}, ip, osVersion, vcpu, ramGb, storageGb, createdOn, username, password, vcloudRef?, hostname?}], completionComment (required if fewer VMs than requested) | `COMPLETED`; creates VMs `ACTIVE`, suspendsOn = createdOn + 90; "VM ready" email with IP + username |
-| `completeHandover` | VCLOUD_ADMIN | requestId, username, password, handedOverOn | Fulfilment `EXISTING_VM`: owner → requester, new cycle from handedOverOn; `COMPLETED`; previous owner notified |
-| `completeRenewal` (Phase 2) | VCLOUD_ADMIN | requestId, restartedOn | RENEW `COMPLETED`; VM `ACTIVE`, new cycle from restartedOn, cycle + 1 |
+| `completeCreation` | VCLOUD_ADMIN | requestId, vms[{vappId \| newVapp{name, vcloudRef?}, ip, osVersion, vcpu, ramGb, storageGb, createdOn, username, password, vcloudRef?, hostname?}], completionComment (required if fewer VMs than requested) | `COMPLETED`; creates VMs `ACTIVE`, expiresOn = createdOn + approvedDurationDays; "VM ready" email with IP + username |
+| `completeHandover` | VCLOUD_ADMIN | requestId, username, password, handedOverOn | Fulfilment `EXISTING_VM`: owner → requester, expiresOn = handedOverOn + approvedDurationDays; `COMPLETED`; previous owner notified |
+| `completeExtension` (Phase 2) | VCLOUD_ADMIN | requestId, poweredOn? (if the VM was expired) | EXTEND `COMPLETED`; new expiresOn = old expiresOn + extensionDays, cycle + 1; VM `ACTIVE` |
+| `completePowerOff` (Phase 2) | VCLOUD_ADMIN | vmId, poweredOffOn | Power-off task closed; records powered_off_at |
 | `completeDeletion` (Phase 2) | VCLOUD_ADMIN | requestId, deletedOn | DELETE `COMPLETED`; VM `DELETED`; owner, backup owner and manager notified |
 
 ## vms and vApps
 
 | Operation | Who | Input | Result |
 |---|---|---|---|
-| `listVms` (query) | Scoped per permission matrix | search (IP, owner name, employee ID, email), filters: vappId, status, buId, environment, availableForReuse, suspending within N days | Paged list |
+| `listVms` (query) | Scoped per permission matrix | search (IP, owner name, employee ID, email), filters: vappId, status, buId, environment, availableForReuse, expiring within N days | Paged list |
 | `getVm` (query) | Owner, backup owner, owner's manager (read-only), OWNER_BU_MANAGER, VCLOUD_ADMIN | vmId | VM + vApp + history (no password) |
 | `revealVmCredentials` | Owner, backup owner, VCLOUD_ADMIN | vmId | Username + password; audited |
 | `listVapps` (query) | Scoped like `listVms` | search, buId | vApps with VM counts |
 | `updateVmDetails` | VCLOUD_ADMIN | vmId, details, reason (required if dates change) | Audited |
 | `transferVmOwner` | VCLOUD_ADMIN | vmId, newOwnerId, reason | Audited; notifies both owners |
 | `setAvailableForReuse` | Owner, VCLOUD_ADMIN | vmId, available | Flags the VM for reuse candidates |
-| `importVmsCsv` | VCLOUD_ADMIN | CSV file (vApp, IP, owner email, OS, specs, creation or last restart date) | Creates vApps and `ACTIVE` VMs; unknown owners become `INVITED` users; all-or-nothing with per-row errors |
-| `requestRenewal` (Phase 2) | Owner, backup owner | vmId, reason | RENEW request, routed like a new request; VM `RENEWAL_PENDING`, notices paused |
+| `importVmsCsv` | VCLOUD_ADMIN | CSV file (vApp, IP, owner email, OS, specs, creation date, expiry date) | Creates vApps and `ACTIVE` VMs; unknown owners become `INVITED` users; all-or-nothing with per-row errors |
+| `requestExtension` (Phase 2) | Owner, backup owner | vmId, extensionDays (≤ extension_max_days), reason | EXTEND request, routed like a new request; VM `EXTENSION_PENDING`, notices paused |
 | `releaseVm` (Phase 2) | Owner | vmId, confirmIp | DELETE request `APPROVED` with ETA; VM `PENDING_DELETION` |
 
 ## tickets (support)

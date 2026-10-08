@@ -1,29 +1,29 @@
-# VM Portal — Locked Plan v2
+# VM Portal — Locked Plan v3
 
 As of 2026-10-08 · Priyodip
 
-Phase 1 replaces Outlook VM requests with a portal: login, a request form, approval routing, an urgent path to the vCloud team, an admin queue and My VMs. Phase 2 adds the 90-day restart cycle with notices, renewals and hard deletion. Phase 3 adds reporting, and Phase 4 adds read-only vCloud data once the vCloud team grants access.
+Phase 1 replaces Outlook VM requests with a portal: login, a request form, approval routing, an urgent path to the vCloud team, an admin queue and My VMs. Phase 2 adds lease expiry with notices, extensions and hard deletion. Phase 3 adds reporting, and Phase 4 adds read-only vCloud data once the vCloud team grants access.
 
 This plan explains the decisions. `docs/domain.md` is the precise rule set the code follows; if the two ever differ, update this plan. Unanswered questions are in `docs/open-questions.md`, each with the default we build with.
 
-## What changed in v2
+## What changed since v1
 
-- The lifecycle runs on the **mandatory 90-day restart cycle**, not a lease. The long-term expiry is recorded but not enforced.
+- **Lifecycle stays on the lease** (v3): expiry = creation date + approved duration. vCloud's 90-day restart is internal to the vCloud team and not tracked by the portal.
 - After the grace period a VM is **hard deleted**, with no archive.
 - VMs live in **vApps**. One request can ask for **several VMs**.
-- The form follows the current request email (BU lead, product stack, number of VMs, CPU, RAM, storage), plus agreed additions. There is no VM name field.
+- The form follows the current request email (BU lead, product stack, duration, number of VMs, CPU, RAM, storage), plus agreed additions. There is no VM name field.
 - The vCloud team sends **access details** (IP, username, password), with OS defaults and an optional custom username and password.
 - **Urgent follow-up**: a requester whose manager is unavailable can go straight to the vCloud team.
 - **Support tickets** for snapshot reverts.
 - **Assign to me** on every admin queue item.
-- **Managers cannot release, delete or hand over a report's VM.**
-- Creation failures are rare, so a rejection with a comment is enough. The on-hold flag and failure categories are removed.
+- **Managers cannot release, delete, extend or hand over a report's VM.**
+- Creation failures are rare, so a rejection with a comment is enough. There is no on-hold flag and there are no failure categories.
 
 ## How the vCloud team works
 
-- All VM work is manual in the vCloud dashboard: create, restart, revert, delete. The portal records it and never touches vCloud.
+- All VM work is manual in the vCloud dashboard: create, power off, revert, delete. The portal records it and never touches vCloud.
 - A vApp is a container for one or more VMs.
-- Every VM must be restarted every 90 days, and each restart starts a new cycle.
+- vCloud restarts VMs on a 90-day cycle. That is the vCloud team's internal routine; the portal does not track it.
 - Creation almost never fails. Storage depletion is the one known case.
 - VM names are the vCloud admins' business. The portal identifies VMs by IP address and owner.
 
@@ -41,14 +41,15 @@ This plan explains the decisions. `docs/domain.md` is the precise rule set the c
 | Environments | Local (hot reload in Docker), smoke (production build, local settings), dev and prod servers (same files, own `.env.deploy`) | What runs on a server has run on a laptop |
 | Approval routing | One routing function; owner BU and `external_bu_mode` in settings | Small matrix; the open question becomes a setting |
 | Approver source | Always from the requester's profile, never typed into the form | Typed emails get misrouted or gamed |
-| Lifecycle anchor | 90-day cycle from creation or last restart | How vCloud actually works |
-| Notices | 10, 3 and 1 day before suspension; grace notices 5 and 10 days after; final notice and automatic deletion request at 15 | Original spec, applied to the real cycle |
-| Renewal | Approved like a new request; the admin restarts the VM; a new cycle starts from the restart date | Original "extend" flow, mapped to restarts |
+| Lease anchor | Expiry = actual creation date + approved duration | Original spec |
+| Notices | 10, 3 and 1 day before expiry; grace notices 5 and 10 days after; final notice and automatic deletion request at 15 | Original spec |
+| At expiry | VM powered off by hand by the vCloud team (a queue task) | Forces a response |
+| Extension | Approved like a new request; new expiry = old expiry + extension | Extending late gains nothing |
 | Deletion | Hard delete, no archive; owner told before and after | Company practice |
 | Requests | One request can ask for 1 to 10 VMs with the same configuration | Matches the current form |
 | Credentials | Stored encrypted; shown behind login with an audited reveal; never emailed | A shared default password must not travel in email |
 | Urgent follow-up | Requester can escalate a pending request to the vCloud team; an admin verifies, then approves on the manager's behalf or declines | Manager unavailable, VM needed now |
-| Admin queue | One queue for creations, handovers, renewals, deletions, follow-ups and tickets; every item has an assignee | Admins see who is handling what |
+| Admin queue | One queue for creations, handovers, extensions, power-off tasks, deletions, follow-ups and tickets; every item has an assignee | Admins see who is handling what |
 | Manager limits | Managers can see their team's VMs but cannot release, delete or hand them over | Company rule |
 | Email action links | Deep links behind login, never one-click tokens | A forwarded email can't act |
 
@@ -61,7 +62,7 @@ This plan explains the decisions. `docs/domain.md` is the precise rule set the c
 | See VMs | Own + where backup owner | Own + team (read-only) | All | All |
 | Approve / reject / return | No | Own reports | External-BU + fallback | On the manager's behalf after an urgent follow-up, reason required |
 | Urgent follow-up | Own pending requests | Own pending requests | Own pending requests | — |
-| Renew a VM | Owner, backup owner | Own VMs only | Own VMs only | Any, reason required |
+| Extend a VM | Owner, backup owner | Own VMs only | Own VMs only | Any, reason required |
 | Release (delete) a VM | Owner only | Own VMs only | Own VMs only | Any, reason required |
 | Snapshot-revert ticket | Owner, backup owner | Own VMs only | Own VMs only | Any |
 | Mark available for reuse | Owner only | Own VMs only | Own VMs only | Any |
@@ -82,7 +83,7 @@ The form keeps every field from today's request email and adds the agreed fields
 | Purpose | Hosting, Testing, Training, Development, Other | Whiteboard |
 | Customer or internal | Radio; customer name if customer | Current email |
 | Product stack | Text (Q13) | Current email |
-| Duration of VM | Dropdown (Q8); recorded, not enforced (Q35) | Current email |
+| Duration of VM | Lease options dropdown (Q8); sets the expiry | Current email |
 | Number of VMs | 1 to 10, same configuration for all (Q9, Q14) | Current email |
 | Add to an existing vApp | Optional picker of the requester's vApps | New |
 | OS and version | Dropdown (Q2) | Current email |
@@ -97,7 +98,7 @@ The form keeps every field from today's request email and adds the agreed fields
 
 ## Manager approval
 
-The manager sees the full request read-only and the VMs the requester already holds. Decisions: Approve, Approve with existing VM (single-VM requests only), Reject, Return for correction. The manager can't edit the specs; to change anything, they return the request.
+The manager sees the full request read-only and the VMs the requester already holds. Decisions: Approve, Approve with existing VM (single-VM requests only), Reject, Return for correction. On approve, the manager may shorten the duration, never lengthen it. The manager can't edit the specs; to change anything, they return the request.
 
 | Field | Rule |
 | --- | --- |
@@ -132,7 +133,7 @@ External-BU requests either need the owner-BU manager group's approval or only n
 
 ## Admin queue
 
-- One queue holds creations, handovers, renewals, deletions, escalated follow-ups and support tickets, with Unassigned, Mine and All tabs.
+- One queue holds creations, handovers, extensions, power-off tasks, deletions, escalated follow-ups and support tickets, with Unassigned, Mine and All tabs.
 - **Assign to me** claims an item, and the other admins see "Handled by <name>". Acting on an unassigned item claims it automatically. Taking over someone else's item asks for confirmation and notifies them.
 - **Creating VMs:**
   1. Mark the request started.
@@ -141,19 +142,19 @@ External-BU requests either need the owner-BU manager group's approval or only n
   4. If only some VMs could be created, record those and explain why. If none could, reject with a comment.
 - **Credentials:** the username is prefilled by OS (Windows: Administrator, Linux: root), and the password with the default VM password. The requester's custom values replace them. The "VM ready" email sends the IP and username plus a link; the password is revealed on the VM page.
 
-## 90-day cycle, renewal and deletion (Phase 2)
+## Lease, extension and deletion (Phase 2)
 
-S is the suspension date: the cycle start (creation or last restart) plus 90 days.
+E is the expiry date: the actual creation date plus the approved duration.
 
 | Day | What happens |
 | --- | --- |
-| S-10, S-3, S-1 | Owner and backup owner asked to renew or release |
-| S | VM suspended by vCloud (Q28); status Suspended |
-| S+5, S+10 | Grace notices, manager copied |
-| S+15 | Final notice "permanently deleted, no archive"; deletion request created automatically |
+| E-10, E-3, E-1 | Owner and backup owner asked to extend or release |
+| E | Status Expired; power-off task for the vCloud team (Q28) |
+| E+5, E+10 | Grace notices, manager copied |
+| E+15 | Final notice "permanently deleted, no archive"; deletion request created automatically |
 | After deletion | Owner, backup owner and manager notified |
 
-- **Renew:** approved like a new request (Q29). The admin restarts the VM and records the date, and a new cycle starts. Notices pause while the renewal is pending. A rejected renewal resumes the schedule, but deletion never happens sooner than 5 days after the rejection.
+- **Extend:** the owner asks for more days (up to the maximum, Q29) with a reason. It's approved like a new request, and same-BU managers' requests are auto-approved. The admin then checks capacity, updates the VM in the dashboard (Q35), and records it: new expiry = old expiry + extension. An expired VM is powered back on. Notices pause while the extension is pending. A rejected extension resumes the schedule, but deletion never happens sooner than 5 days after the rejection.
 - **Release:** the owner types the IP to confirm permanent deletion, and a deletion request goes to the queue with an ETA (Q33). No approval is needed.
 
 ## Support tickets
@@ -167,7 +168,7 @@ Snapshot revert is the first ticket type. The owner or backup owner picks the VM
 - **Approve with existing VM:**
   1. The request goes to the queue as a handover.
   2. The admin resets access (Q19) and records new credentials.
-  3. The requester becomes the owner, and a new cycle starts.
+  3. The requester becomes the owner, with expiry = handover date + approved duration.
   4. The previous owner is notified.
 
 ## User creation
@@ -193,7 +194,7 @@ Everyone starts as an end user, and only admins promote. The manager picker show
 
 ## Statuses
 
-Requests (create, renew and delete share one table):
+Requests (create, extend and delete share one table):
 
 ```mermaid
 stateDiagram-v2
@@ -222,14 +223,13 @@ VMs:
 ```mermaid
 stateDiagram-v2
     [*] --> ACTIVE: details recorded
-    ACTIVE --> SUSPENDED: day 90
-    ACTIVE --> RENEWAL_PENDING: renewal requested
-    SUSPENDED --> RENEWAL_PENDING: renewal requested
-    RENEWAL_PENDING --> ACTIVE: restarted, new cycle
-    RENEWAL_PENDING --> SUSPENDED: rejected after day 90
-    RENEWAL_PENDING --> ACTIVE: rejected before day 90
+    ACTIVE --> EXPIRED: expiry date, powered off
+    ACTIVE --> EXTENSION_PENDING: extension requested
+    EXPIRED --> EXTENSION_PENDING: extension requested
+    EXTENSION_PENDING --> ACTIVE: extended, new expiry
+    EXTENSION_PENDING --> EXPIRED: rejected after expiry
     ACTIVE --> PENDING_DELETION: owner releases
-    SUSPENDED --> PENDING_DELETION: owner releases, or day 105
+    EXPIRED --> PENDING_DELETION: owner releases, or E+15
     PENDING_DELETION --> DELETED: hard deleted
     DELETED --> [*]
 ```
@@ -244,10 +244,10 @@ Support tickets: Open → In progress → Resolved; Open or In progress → Reje
 | session, account, verification | Better Auth internals | Generated |
 | business_units | BUs | name, is_owner_bu, lead_user_id |
 | delegations | Out-of-office (Phase 2) | manager_id, delegate_id, starts_on, ends_on |
-| requests | Create, renew, delete | type, status, fulfilment, requester, vm_count, target vApp, form fields, custom credentials (encrypted), assignee, escalation fields |
+| requests | Create, extend, delete | type, status, fulfilment, requester, vm_count, target vApp, form fields, custom credentials (encrypted), assignee, escalation fields |
 | approvals | One row per step | approver, routed_via, decision, category, comment, fields_to_update, resubmit_by, offered_vm_id |
 | vapps | vApp containers | name, vcloud_ref, owner_id, bu_id |
-| vms | Inventory | vapp_id, owner, backup owner, ip, os, specs, username, password (encrypted), cycle_started_on, suspends_on, status, available_for_reuse |
+| vms | Inventory | vapp_id, owner, backup owner, ip, os, specs, username, password (encrypted), created_on, expires_on, status, available_for_reuse |
 | tickets | Support tickets | type, vm_id, snapshot_ref, priority, status, assignee, resolution |
 | notifications | Sent notices, duplicate guard | unique (vm_id, cycle_no, stage) |
 | audit_log | Every state change | actor, entity, from/to state, reason |
@@ -258,18 +258,17 @@ Support tickets: Open → In progress → Resolved; Open or In progress → Reje
 
 | Where | Convention | Example |
 | --- | --- | --- |
-| Variables, functions, object keys, API JSON | camelCase | `suspendsOn` |
+| Variables, functions, object keys, API JSON | camelCase | `expiresOn` |
 | Components, types, component files | PascalCase | `RequestForm.tsx` |
 | Other files and folders, URLs | kebab-case | `/vm-requests` |
-| Postgres tables and columns | snake_case | `suspends_on` |
+| Postgres tables and columns | snake_case | `expires_on` |
 | Status values, constants, env vars | SCREAMING_SNAKE | `PENDING_APPROVAL` |
 
 ## Risks
 
 - **Every VM shares one default password.** Anyone who learns `Password@1234` can log into any VM that still uses it. The portal limits the damage: the password is never emailed, it's shown only behind login with an audited reveal, and it's stored encrypted. The real fix sits with the vCloud team. Users should change it at first login, or each VM should get its own password; the completion form makes a per-VM password as easy to enter as the default.
-- **Renewal approvals every 90 days** mean every VM needs a manager decision four times a year. If that's too heavy, Q29 can make renewals automatic for VMs with no open issues.
 - **No SSO means no automatic offboarding.** When people leave, their VMs become orphans. Mitigations: the backup owner and the deactivation flow, plus roster confirmation and an inactive-owner flag in Phase 3.
-- **The portal can't verify manual work** until Phase 4. It records an admin's word that a VM was created, restarted or deleted.
+- **The portal can't verify manual work** until Phase 4. It records an admin's word that a VM was created, powered off, extended or deleted.
 - **The owner-BU group is a bottleneck** for external-BU requests and fallbacks. Mitigations: at least 2 people, the urgent follow-up, and the SLA ladder.
 
 ## Phases
@@ -277,11 +276,9 @@ Support tickets: Open → In progress → Resolved; Open or In progress → Reje
 | Phase | Scope | Gate to the next phase |
 | --- | --- | --- |
 | 1. Replace Outlook requests | Auth and user setup; request form (several VMs, vApp, credentials); approval routing with categories, `external_bu_mode`, urgent follow-up and reuse; admin queue with assign and take-over; completion with per-VM details and credentials; VMs and vApps with search; snapshot-revert tickets; emails; audit; CSV import of existing VMs and vApps | Outlook VM requests switched off |
-| 2. 90-day cycle engine | Daily job; notices; suspension; grace; automatic deletion requests; renew and release; SLA ladder; delegation; auto-cancel of returned requests; daily snapshots | Every VM's restart date tracked; no VM deleted without warnings |
+| 2. Lifecycle engine | Daily job; expiry notices; power-off tasks; grace; automatic deletion requests; extend and release; SLA ladder; delegation; auto-cancel of returned requests; daily snapshots | No VM outlives its lease untracked |
 | 3. Reporting and quality of life | Role dashboards, exports, roster confirmation, inactive-owner flag, bulk actions, admin 2FA, more ticket types | vCloud team grants API access |
-| 4. vCloud read-only data | Sync of status, real suspension dates, usage and idle detection. Creating, restarting and deleting stay manual | — |
-
-Deferred: enforcing the long-term expiry ("Duration of VM", Q35).
+| 4. vCloud read-only data | Sync of status, usage and idle detection. Creating, powering off and deleting stay manual | — |
 
 Phase 1 build checklist:
 
@@ -299,5 +296,5 @@ Phase 1 build checklist:
 - [ ] Snapshot-revert tickets: raise, cancel, start, resolve, reject
 - [ ] Template emails on every status change, plus an in-app inbox
 - [ ] One state-transition function that writes the audit log
-- [ ] CSV import of existing VMs and vApps (with last restart date); unknown owners become INVITED users
+- [ ] CSV import of existing VMs and vApps (with creation and expiry dates); unknown owners become INVITED users
 - [ ] Docker Compose deploy, SMTP relay, nightly backup with a tested restore

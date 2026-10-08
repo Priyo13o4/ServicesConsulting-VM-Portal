@@ -1,5 +1,5 @@
 %% VM Portal - Request and Lifecycle Workflow (v3)
-%% All VM work (create, restart, revert, delete) is done by hand in the vCloud dashboard; the portal records it.
+%% All VM work (create, power off, revert, delete) is done by hand in the vCloud dashboard; the portal records it.
 %% Yellow = sub-process in another diagram. Blue = Phase 2.
 flowchart TD
     Start(["Employee opens portal"]) --> Auth[["Login + session check<br/>(Diagram 3)"]]
@@ -24,7 +24,7 @@ flowchart TD
     Approved --> Kind{"New VMs or existing VM?"}
     Kind -->|"Existing VM offered by approver"| HQ["Handover item in admin queue"]
     HQ --> Reset["Admin resets access by hand<br/>and records new credentials"]
-    Reset --> Handed["Requester becomes owner<br/>new 90-day cycle<br/>Status: COMPLETED"]
+    Reset --> Handed["Requester becomes owner<br/>expiry = handover date + approved duration<br/>Status: COMPLETED"]
     Handed --> Active
     Kind -->|"New VMs"| Queue["Create item in admin queue"]
     VD -.->|"Assign to me"| Queue
@@ -33,26 +33,26 @@ flowchart TD
     Manual --> Created{"VMs created?"}
     Created -->|"No, e.g. storage full"| TechRej["Reject with comment<br/>Status: REJECTED"] --> Closed2(["Request closed"])
     Created -->|Yes| Record["Admin records per VM: vApp, IP, OS, specs,<br/>creation date, username, password<br/>defaults: Administrator or root + default password"]
-    Record --> Active["Status: COMPLETED<br/>VMs ACTIVE, 90-day cycle starts<br/>VM-ready email: IP, username, link"]
+    Record --> Active["Status: COMPLETED<br/>VMs ACTIVE, expiry = creation date + approved duration<br/>VM-ready email: IP, username, link"]
 
-    %% ---------- 90-day cycle (Phase 2) ----------
+    %% ---------- Lease lifecycle (Phase 2) ----------
     Active --> Monitor["Daily lifecycle job"]
-    Monitor --> Due{"Notice due?<br/>S-10 / S-3 / S-1"}
-    Due -->|Yes| Notice["Notice to owner + backup owner:<br/>renew or release"] --> Act{"Owner action"}
-    Due -->|No| SDay{"Day 90 reached?"}
-    Act -->|"No response"| SDay
-    SDay -->|No| Monitor
-    SDay -->|Yes| Susp["Status: SUSPENDED<br/>vCloud suspends the VM"]
-    Susp --> Grace["Grace notices at S+5, S+10<br/>manager copied"]
+    Monitor --> Due{"Notice due?<br/>E-10 / E-3 / E-1"}
+    Due -->|Yes| Notice["Notice to owner + backup owner:<br/>extend or release"] --> Act{"Owner action"}
+    Due -->|No| EDay{"Expiry date reached?"}
+    Act -->|"No response"| EDay
+    EDay -->|No| Monitor
+    EDay -->|Yes| Expired["Status: EXPIRED<br/>Power-off task: admin powers it off by hand"]
+    Expired --> Grace["Grace notices at E+5, E+10<br/>manager copied"]
     Grace --> GAct{"Owner action during grace"}
-    GAct -->|"No response by S+15"| Final["Final notice: permanently deleted,<br/>no archive<br/>DELETE request created"]
+    GAct -->|"No response by E+15"| Final["Final notice: permanently deleted,<br/>no archive<br/>DELETE request created"]
 
-    Act -->|Renew| Renew["RENEW request<br/>Status: RENEWAL_PENDING<br/>notices paused"]
-    GAct -->|Renew| Renew
-    Renew --> Appr2[["Approval routing<br/>(Diagram 2)"]]
-    Appr2 -->|Approved| Restart["Admin restarts the VM by hand<br/>and records the restart date"]
-    Restart --> NewCycle["Status: ACTIVE<br/>new 90-day cycle from restart date"] --> Monitor
-    Appr2 -->|"Rejected or timed out"| RenRej["Owner notified, schedule resumes<br/>deletion no earlier than rejection + 5 days"] --> Monitor
+    Act -->|Extend| ExtReq["EXTEND request: days + reason<br/>Status: EXTENSION_PENDING<br/>notices paused"]
+    GAct -->|Extend| ExtReq
+    ExtReq --> Appr2[["Approval routing<br/>(Diagram 2)"]]
+    Appr2 -->|Approved| ExtDo["Admin checks capacity, updates the VM<br/>in the dashboard, powers it on if expired"]
+    ExtDo --> NewE["Status: ACTIVE<br/>new expiry = old expiry + extension"] --> Monitor
+    Appr2 -->|"Rejected or timed out"| ExtRej["Owner notified, schedule resumes on original expiry<br/>deletion no earlier than rejection + 5 days"] --> Monitor
 
     Act -->|Release| Confirm["Owner types the IP to confirm:<br/>permanent deletion, no archive"]
     GAct -->|Release| Confirm
@@ -65,4 +65,4 @@ flowchart TD
     classDef sub fill:#fff4d6,stroke:#b7791f,color:#5c3d00
     classDef p2 fill:#e3eefc,stroke:#3b6db3,color:#14325e
     class Auth,Appr1,Appr2,VD sub
-    class Monitor,Due,Notice,Act,SDay,Susp,Grace,GAct,Final,Renew,Restart,NewCycle,RenRej,Confirm,DelReq,DQ,HardDel,Deleted p2
+    class Monitor,Due,Notice,Act,EDay,Expired,Grace,GAct,Final,ExtReq,ExtDo,NewE,ExtRej,Confirm,DelReq,DQ,HardDel,Deleted p2

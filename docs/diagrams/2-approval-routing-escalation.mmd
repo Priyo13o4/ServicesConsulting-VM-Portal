@@ -1,7 +1,7 @@
-%% VM Portal - Approval Routing, Urgent Follow-up and SLA (CREATE and RENEW requests)
+%% VM Portal - Approval Routing, Urgent Follow-up and SLA (CREATE and EXTEND requests)
 %% Day counts and external_bu_mode live in settings. Blue = Phase 2.
 flowchart TD
-    In(["CREATE or RENEW request submitted"]) --> SameBU{"Requester's BU = owner BU?"}
+    In(["CREATE or EXTEND request submitted"]) --> SameBU{"Requester's BU = owner BU?"}
     SameBU -->|Yes| SameMgr{"Requester is a manager?"}
     SameMgr -->|Yes| Auto["Auto-approved<br/>audit: same-BU manager"] --> OK(["APPROVED"])
     SameMgr -->|No| C1["Chain: 1. line manager"]
@@ -43,7 +43,7 @@ flowchart TD
     R2 --> R3["Business day 7:<br/>Status: TIMED_OUT"]
     R3 --> TO{"Request type"}
     TO -->|CREATE| TOC(["Closed: requester may resubmit"])
-    TO -->|RENEW| TOE(["Treated as rejected:<br/>schedule resumes"])
+    TO -->|EXTEND| TOE(["Treated as rejected:<br/>schedule resumes"])
 
     classDef p2 fill:#e3eefc,stroke:#3b6db3,color:#14325e
     classDef urgent fill:#fde8e8,stroke:#b42318,color:#5c1111

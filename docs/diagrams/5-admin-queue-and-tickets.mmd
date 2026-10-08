@@ -4,7 +4,7 @@ flowchart TD
     TForm --> TOpen["Ticket: OPEN<br/>no approval needed"]
     TOpen -.->|"Requester cancels"| TCan(["Ticket: CANCELLED"])
     TOpen --> Q
-    ReqIn(["Approved create, handover,<br/>renew or delete request"]) --> Q
+    ReqIn(["Approved create, handover,<br/>extend or delete request;<br/>power-off task (Phase 2)"]) --> Q
     EscIn(["Urgent follow-up<br/>(Diagram 2)"]) --> Q
 
     Q["Admin queue<br/>tabs: Unassigned, Mine, All<br/>each row: kind, priority, age, assignee"] --> Who{"Assigned?"}
@@ -20,7 +20,7 @@ flowchart TD
     TRev --> TDone{"Reverted?"}
     TDone -->|Yes| TRes["Ticket: RESOLVED<br/>comment to requester"]
     TDone -->|"Cannot be done"| TRej["Ticket: REJECTED<br/>comment to requester"]
-    Kind -->|"Create, handover,<br/>renew, delete"| ReqWork["Follow Diagram 1"]
+    Kind -->|"Create, handover, extend,<br/>power off, delete"| ReqWork["Follow Diagram 1"]
     Kind -->|"Escalated follow-up"| EscWork["Verify, then approve on behalf<br/>or decline (Diagram 2)"]
     TRes --> Close(["Closing updates status, records,<br/>notifications and audit in one step"])
     TRej --> Close

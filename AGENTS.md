@@ -1,6 +1,6 @@
 # AGENTS.md — VM Portal
 
-Internal portal that replaces Outlook-based VMware VM requests: request → approval → manual creation by vCloud admins → 90-day restart cycle → renewal or hard deletion. Support tickets (snapshot revert) go straight to the vCloud admins. The portal never touches vCloud: admins do all VM work by hand in the vCloud dashboard and record it here. Intranet only. Built in phases; we are in **Phase 1**.
+Internal portal that replaces Outlook-based VMware VM requests: request → approval → manual creation by vCloud admins → lease expiry → extension or hard deletion. Support tickets (snapshot revert) go straight to the vCloud admins. The portal never touches vCloud: admins do all VM work by hand in the vCloud dashboard and record it here. Intranet only. Built in phases; we are in **Phase 1**.
 
 Read before working:
 - `docs/domain.md` — roles, permissions, approval routing, statuses, lifecycle rules, data model, settings
@@ -59,7 +59,7 @@ scripts/                  Bundled one-off Node scripts (migrate, seed)
 docker/                   Dockerfile, nginx, Postgres init
 ```
 
-Create a file only when it has real content. Not every module needs every file.
+Create a file only when it has real content. Not every module needs every file. Exception: every route in `docs/screens.md` already has a placeholder `page.tsx` that only renders its title; replace it when you build that page, and never add business logic to it.
 
 ## Architecture rules
 
@@ -67,13 +67,13 @@ Create a file only when it has real content. Not every module needs every file.
 2. **Every status change goes through `transition()`** in `src/modules/workflow/`. It checks the move is allowed, updates the row, writes `audit_log`, and queues the notification. Never update a `status` column directly.
 3. **Authorize on the server, every time.** Every action and query starts with `requireUser()` or `requireRole()` from `src/modules/auth/guards.ts`. `proxy.ts` only does optimistic redirects to `/login`; it is not security.
 4. **The approver always comes from the requester's profile.** Never accept a manager email or approver ID from a form.
-5. **No business numbers in code.** The 90-day cycle, notice days, SLA days, limits, default usernames and ETAs are read from the `settings` table.
+5. **No business numbers in code.** Lease options, notice days, SLA days, limits, default usernames and ETAs are read from the `settings` table.
 6. **Action results use one shape:** `{ ok: true, data } | { ok: false, error: { code, message } }`. Codes: `UNAUTHENTICATED`, `FORBIDDEN`, `NOT_FOUND`, `INVALID_INPUT`, `INVALID_TRANSITION`, `CONFLICT`.
 7. **Dates:** store `timestamptz` in UTC. All business-day math goes through one helper in `src/lib/`.
 8. **Server data is fetched in Server Components** via `queries.ts`. After a mutation, call `revalidatePath`. Do not add a client data-fetching library.
 9. **External systems** (SMTP now, vCloud in Phase 4) sit behind one adapter module each. Their naming and shapes never reach our types or tables.
 10. **VM passwords** are encrypted with `CREDENTIALS_KEY` through one helper in `src/lib/`. Never log them, never email them, never write them to `audit_log`. They are returned only by `revealVmCredentials`, and each reveal is audited.
-11. **Managers never act on a report's VM.** Only the owner (and backup owner where `docs/domain.md` allows) renews, releases, raises tickets or marks a VM for reuse.
+11. **Managers never act on a report's VM.** Only the owner (and backup owner where `docs/domain.md` allows) extends, releases, raises tickets or marks a VM for reuse.
 
 ## Zustand (client UI state only)
 
@@ -99,16 +99,16 @@ Follow the official Next.js pattern (zustand.docs.pmnd.rs/guides/nextjs):
 
 | Where | Case | Example |
 |---|---|---|
-| Variables, functions, object keys, API JSON | camelCase | `suspendsOn` |
+| Variables, functions, object keys, API JSON | camelCase | `expiresOn` |
 | Components, types, interfaces, component files | PascalCase | `RequestForm.tsx`, `VmStatus` |
 | Other files and folders, URLs | kebab-case | `approval-routing.ts`, `/vm-requests` |
-| Postgres tables and columns | snake_case | `suspends_on` |
+| Postgres tables and columns | snake_case | `expires_on` |
 | Status and role values, constants, env vars | SCREAMING_SNAKE | `PENDING_APPROVAL`, `SMTP_HOST` |
 
 ## Testing — test-driven for business logic
 
 - For business logic, **write or extend the failing test first**, then the code, then make it pass.
-- **Test:** approval routing (incl. `external_bu_mode` and urgent follow-up), the permission matrix, `transition()` rules, the 90-day cycle and notice-stage calculation, queue assignment and take-over, reuse candidate matching, credential encryption round-trip, business-day math, user activation rules, CSV import validation, Zod schemas with real rules.
+- **Test:** approval routing (incl. `external_bu_mode` and urgent follow-up), the permission matrix, `transition()` rules, expiry and notice-stage calculation, queue assignment and take-over, reuse candidate matching, credential encryption round-trip, business-day math, user activation rules, CSV import validation, Zod schemas with real rules.
 - **Do not test:** layout, styling, simple presentational components, shadcn wrappers, trivial getters, framework behaviour.
 - **One test file per module** (`modules/<feature>/<feature>.test.ts`), grouped with `describe`. Add cases to the existing file instead of creating new files.
 - Pure logic tests use no database. Tests that need one use `DATABASE_URL_TEST` and reset their tables in `beforeEach`.
