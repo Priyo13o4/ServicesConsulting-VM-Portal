@@ -9,7 +9,7 @@ The business rules the code must follow. Source: "VM Portal — Locked Plan v1".
 | `END_USER` | Every employee. Everyone starts here. |
 | `MANAGER` | Line managers. Approve their own reports' requests. |
 | `OWNER_BU_MANAGER` | The group (2+ people) in the BU that owns the VMs. Approves external-BU requests; fallback approver for everything. |
-| `VCLOUD_ADMIN` | vCloud team. Provisions, updates, deletes VMs; manages users and settings. |
+| `VCLOUD_ADMIN` | vCloud team. Creates, powers off and deletes VMs by hand in the vCloud dashboard, then records it in the portal; manages users and settings. |
 
 Only a `VCLOUD_ADMIN` changes roles. The last admin cannot be demoted.
 
@@ -22,7 +22,7 @@ Only a `VCLOUD_ADMIN` changes roles. The last admin cannot be demoted.
 | See VMs | Own | Own + team | All | All |
 | Approve / reject / return | No | Own reports | External-BU + fallback | Override after escalation, reason required |
 | Extend / release a VM (Phase 2) | Own | Own + team | Own + team | Any, reason required |
-| Provision, update details, delete VMs | No | No | No | Yes |
+| Record VM creation, details, power-off, deletion | No | No | No | Yes |
 | Confirm new team members | No | Own reports | Own reports | Any |
 | Manage users, roles, BUs, settings | No | No | No | Yes |
 
@@ -62,8 +62,10 @@ SUBMITTED | PENDING_APPROVAL → CANCELLED   (requester)
 PENDING_APPROVAL → RETURNED → SUBMITTED    (correction loop)
 PENDING_APPROVAL → REJECTED | TIMED_OUT
 APPROVED → REJECTED                        (technical rejection by vCloud admin)
-CREATION_IN_PROGRESS ↔ PROVISIONING_FAILED → REJECTED (cancelled)
+CREATION_IN_PROGRESS → REJECTED           (could not be created; reason required)
 ```
+
+There is no automated provisioning. `CREATION_IN_PROGRESS` means an engineer is creating the VM by hand in the vCloud dashboard; `COMPLETED` is set when they enter the VM details. If creation fails, the engineer retries in the dashboard; the portal does not track attempts.
 
 Any other move is `INVALID_TRANSITION`. Asking the requester for more information does not change status; it is a comment in the request timeline (an `audit_log` row with action `COMMENT`).
 
@@ -72,9 +74,9 @@ Any other move is `INVALID_TRANSITION`. Asking the requester for more informatio
 ```
 ACTIVE → EXTENSION_PENDING → ACTIVE (approved: new expiry, or rejected before expiry)
 EXPIRED → EXTENSION_PENDING → EXPIRED (rejected after expiry)
-ACTIVE → EXPIRED (expiry date; VM powered off)
+ACTIVE → EXPIRED (expiry date; power-off task for the vCloud team)
 ACTIVE | EXPIRED → PENDING_DELETION (user releases, or E+15)
-PENDING_DELETION → DELETED (admin)
+PENDING_DELETION → DELETED (admin deletes it in the dashboard, then marks it deleted)
 ```
 
 ## Lease and lifecycle rules
@@ -82,6 +84,7 @@ PENDING_DELETION → DELETED (admin)
 - E (expiry) = actual creation date + approved duration. The creation date is entered by the admin when completing the request.
 - Approver may shorten the requested duration, never lengthen it.
 - Lease options: 30, 60, 90, 180 days (default, Q8).
+- All VM operations (create, power off, power on, delete) are manual in the vCloud dashboard. The portal creates a task for the vCloud team and records when it is done.
 - Phase 2: notices at E-10, E-3, E-1. At E: `EXPIRED`, power-off task for admins. Grace notices at E+5, E+10 (manager copied). E+15: final notice + automatic deletion request.
 - Extension: new E = old E + extension length (never today + length). Notices pause while `EXTENSION_PENDING`; the VM is left as it is.
 - Rejected or timed-out extension: notices resume on the original E; deletion never earlier than rejection + 5 days.

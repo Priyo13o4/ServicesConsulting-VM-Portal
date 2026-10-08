@@ -1,5 +1,6 @@
 %% VM Portal - Request and Lifecycle Workflow (v2)
 %% Green = added or changed vs v1. Yellow = sub-process (see linked diagram).
+%% All VM work (create, power off, power on, delete) is done by hand in the vCloud dashboard; the portal records it.
 flowchart TD
     Start(["Employee opens portal"]) --> Auth[["Login + session check<br/>(Diagram 3)"]]
     Auth --> Role{"Identify user role"}
@@ -21,23 +22,19 @@ flowchart TD
     Appr1 -->|"Rejected or timed out"| Rej["Record reason<br/>Status: REJECTED<br/>Notify requester"] --> Closed1
     Appr1 -->|Approved| Approved["Status: APPROVED"]
 
-    %% ---------- vCloud provisioning ----------
+    %% ---------- Manual VM creation by vCloud admins ----------
     Approved --> Queue["Add to vCloud creation queue<br/>Notify vCloud team"]
     VD -.->|"works the queue"| Queue
     Queue --> Assign["Assign request to engineer"]
     Assign --> Feas["Technical and capacity validation"]
-    Feas --> FeasD{"Technically feasible?"}
+    Feas --> FeasD{"Can it be created?"}
     FeasD -->|"More information required"| MoreInfo["Request additional information<br/>Notify requester and manager"] --> InfoGiven["Requester provides information"] --> Feas
     FeasD -->|No| TechRej["Record technical rejection"] --> NotifyFail["Notify requester and manager"] --> Closed2(["Request Closed"])
-    FeasD -->|Yes| Tmpl["Select VM template and configuration<br/>Status: CREATION_IN_PROGRESS"]
-    Tmpl --> Prov["Start VM provisioning"]
-    Prov --> ProvD{"Provisioning successful?"}
-    ProvD -->|No| ProvFail["Status: PROVISIONING_FAILED<br/>Record error, notify engineer"] --> Retry{"Retry possible?"}
-    Retry -->|Yes| Prov
-    Retry -->|No| ManualStep["Complete provisioning manually or cancel"] --> Manual{"Manual provisioning successful?"}
-    Manual -->|No| NotifyFail
-    Manual -->|Yes| Record
-    ProvD -->|Yes| Record["Record VM details<br/>hostname, IP, actual creation date"]
+    FeasD -->|Yes| CStart["Engineer marks it started<br/>Status: CREATION_IN_PROGRESS"]
+    CStart --> Manual["Engineer creates the VM by hand<br/>in the vCloud dashboard"]
+    Manual --> Created{"VM created?"}
+    Created -->|"No: cannot be created"| TechRej
+    Created -->|Yes| Record["Engineer enters VM details in the portal<br/>hostname, IP, specs, actual creation date"]
     Record --> SetExp["Set owner and expiry<br/>E = actual creation date + lease"]
     SetExp --> Active["Status: ACTIVE<br/>Notify requester and manager<br/>VM visible in My VMs"]
 
@@ -49,7 +46,7 @@ flowchart TD
     Due -->|Yes| Notice["Send expiry notice<br/>Extend / Release links - login required"]
     Notice --> Act{"Employee action"}
     Act -->|"No response"| ExpD
-    ExpD -->|Yes| Expired["Status: EXPIRED<br/>Power off VM<br/>Notify vCloud team"]
+    ExpD -->|Yes| Expired["Status: EXPIRED<br/>Power-off task for vCloud team<br/>done by hand in the dashboard"]
     Expired --> Grace["Grace notices at E+5 and E+10<br/>CC manager"]
     Grace --> GraceAct{"Employee action during grace"}
     GraceAct -->|"No response"| Final["E+15: final notice<br/>Auto-create deletion request"]
@@ -63,7 +60,7 @@ flowchart TD
     ExtVal --> ExtOK{"Extension allowed?"}
     ExtOK -->|No| ExtTechRej["Reject with technical reason"] --> ExtRej
     ExtRej --> Resume["Notices resume on original expiry<br/>Deletion no earlier than rejection + 5 days"] --> Monitor
-    ExtOK -->|Yes| ExtUpd["New expiry = old expiry + extension<br/>Cycle + 1, notices resume<br/>Power on if in grace<br/>Record extension history"]
+    ExtOK -->|Yes| ExtUpd["New expiry = old expiry + extension<br/>Cycle + 1, notices resume<br/>If in grace: admin powers it back on<br/>Record extension history"]
     ExtUpd --> ExtNotify["Notify employee and manager"] --> Monitor
 
     %% ---------- Release and deletion ----------
@@ -75,11 +72,11 @@ flowchart TD
     VD -.->|"works the queue"| DelQueue
     DelQueue --> RetD{"Data retention required by policy?"}
     RetD -->|Yes| Archive["Archive data per retention policy"] --> Delete
-    RetD -->|No| Delete["Power off if running<br/>Delete or decommission VM"]
-    Delete --> Decom["Status: DELETED<br/>Record actual deletion date vs ETA<br/>Notify employee and manager"]
+    RetD -->|No| Delete["vCloud admin powers off and deletes<br/>the VM by hand in the dashboard"]
+    Delete --> Decom["Admin marks it deleted in the portal<br/>Status: DELETED<br/>Record actual deletion date vs ETA<br/>Notify employee and manager"]
     Decom --> Done(["VM Lifecycle Completed"])
 
     classDef new fill:#dff5e3,stroke:#2e7d32,color:#1b3d20
     classDef sub fill:#fff4d6,stroke:#b7791f,color:#5c3d00
     class Auth,Appr1,Appr2 sub
-    class ForEmp,Cancel,Monitor,Due,Notice,Expired,Grace,GraceAct,Final,ExtForm,ExtRej,Resume,ExtUpd,Confirm,DelReq,RetD,Decom new
+    class CStart,Manual,Created,Record,ForEmp,Cancel,Monitor,Due,Notice,Expired,Grace,GraceAct,Final,ExtForm,ExtRej,Resume,ExtUpd,Confirm,DelReq,RetD,Decom new

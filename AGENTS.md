@@ -1,6 +1,6 @@
 # AGENTS.md — VM Portal
 
-Internal portal that replaces Outlook-based VMware VM requests: request → approval → manual creation by vCloud admins → lease expiry → extension or deletion. Intranet only. Built in phases; we are in **Phase 1**.
+Internal portal that replaces Outlook-based VMware VM requests: request → approval → manual creation by vCloud admins → lease expiry → extension or deletion. The portal never creates, powers off or deletes a VM itself: vCloud admins do that by hand in the vCloud dashboard and record it here. Intranet only. Built in phases; we are in **Phase 1**.
 
 Read before working:
 - `docs/domain.md` — roles, permissions, approval routing, statuses, lifecycle rules, data model, settings
@@ -37,7 +37,7 @@ src/
     (auth)/               login, register, reset-password, set-password, awaiting-activation
     (portal)/             signed-in pages (see docs/screens.md)
     api/                  auth handler, health, CSV exports
-  modules/<feature>/      One folder per domain: auth, users, requests, approvals, provisioning, vms,
+  modules/<feature>/      One folder per domain: auth, users, requests, approvals, creation-queue, vms,
                           notifications, workflow, settings, audit
     service.ts            Business logic. Plain TypeScript, no Next.js imports. Takes db + input, returns result.
     queries.ts            Reads, always scoped to the caller's role.

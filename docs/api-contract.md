@@ -61,17 +61,17 @@ Conventions:
 | `reassignApproval` | VCLOUD_ADMIN | approvalId, approverId, reason | Approval re-routed (`routed_via = REASSIGNED`) |
 | `listMyApprovals` (query) | MANAGER, OWNER_BU_MANAGER, VCLOUD_ADMIN | — | Pending approvals assigned to the caller |
 
-## provisioning (vCloud admin queue)
+## creationQueue (vCloud admin queue)
+
+VMs are created by hand in the vCloud dashboard. These operations only record what the engineer did.
 
 | Operation | Who | Input | Result / transition |
 |---|---|---|---|
 | `assignRequest` | VCLOUD_ADMIN | requestId, engineerId | Assignee set |
-| `startProvisioning` | VCLOUD_ADMIN | requestId | `APPROVED` → `CREATION_IN_PROGRESS` |
-| `rejectTechnically` | VCLOUD_ADMIN | requestId, reason | `APPROVED` → `REJECTED` |
-| `markProvisioningFailed` | VCLOUD_ADMIN | requestId, error | `CREATION_IN_PROGRESS` → `PROVISIONING_FAILED` |
-| `retryProvisioning` | VCLOUD_ADMIN | requestId | `PROVISIONING_FAILED` → `CREATION_IN_PROGRESS` |
-| `completeProvisioning` | VCLOUD_ADMIN | requestId, vmName, hostname, ip, environment, cloudPlatform, osVersion, vcpu, ramGb, storageGb, createdOn, vcloudRef?, accessNote | `COMPLETED`; creates VM `ACTIVE` with expiresOn = createdOn + approvedDurationDays |
-| `listQueue` (query) | VCLOUD_ADMIN | filters | `APPROVED`, `CREATION_IN_PROGRESS`, `PROVISIONING_FAILED` requests |
+| `startCreation` | VCLOUD_ADMIN | requestId | `APPROVED` → `CREATION_IN_PROGRESS` (engineer is creating it in the dashboard) |
+| `rejectTechnically` | VCLOUD_ADMIN | requestId, reason | `APPROVED` \| `CREATION_IN_PROGRESS` → `REJECTED` (cannot be created) |
+| `completeCreation` | VCLOUD_ADMIN | requestId, vmName, hostname, ip, environment, cloudPlatform, osVersion, vcpu, ramGb, storageGb, createdOn, vcloudRef?, accessNote | `COMPLETED`; creates VM `ACTIVE` with expiresOn = createdOn + approvedDurationDays |
+| `listQueue` (query) | VCLOUD_ADMIN | filters | `APPROVED` and `CREATION_IN_PROGRESS` requests |
 
 ## vms
 
@@ -84,8 +84,8 @@ Conventions:
 | `importVmsCsv` | VCLOUD_ADMIN | CSV file | Creates `ACTIVE` VMs; unknown owners become `INVITED` users; all-or-nothing with per-row errors |
 | `requestExtension` (Phase 2) | Owner, owner's manager | vmId, extensionDays, reason | EXTEND request; VM `EXTENSION_PENDING`, notices paused |
 | `releaseVm` (Phase 2) | Owner, owner's manager | vmId, confirmHostname | DELETE request with ETA; VM `PENDING_DELETION` |
-| `completeDeletion` (Phase 2) | VCLOUD_ADMIN | vmId, deletedOn | VM `DELETED` |
-| `completePowerOff` (Phase 2) | VCLOUD_ADMIN | vmId | Power-off task closed |
+| `completeDeletion` (Phase 2) | VCLOUD_ADMIN | vmId, deletedOn | Records a deletion done in the dashboard; VM `DELETED` |
+| `completePowerOff` (Phase 2) | VCLOUD_ADMIN | vmId | Records a power-off done in the dashboard; task closed |
 
 ## Route handlers (non-action HTTP)
 

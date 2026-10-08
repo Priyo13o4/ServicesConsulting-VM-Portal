@@ -42,12 +42,12 @@ Signed-out users hitting any portal page are redirected to `/login` (optimistic 
 
 | Route | Shows | Actions | Phase |
 |---|---|---|---|
-| `/admin/queue` | Creation queue: `APPROVED`, `CREATION_IN_PROGRESS`, `PROVISIONING_FAILED` | Assign, start, request info, reject, mark failed, retry, complete with VM details | 1 |
+| `/admin/queue` | Creation queue: `APPROVED`, `CREATION_IN_PROGRESS`. VMs are created by hand in the vCloud dashboard | Assign, mark started, request info, reject, complete with VM details | 1 |
 | `/admin/users` | Tabs: All users, Activation queue | Invite, import CSV, activate, change role, change manager/BU, deactivate (with VM transfer), reactivate, resend invite | 1 |
 | `/admin/approvals` | All pending approvals with age | Reassign (reason required) | 1 |
 | `/admin/vms/import` | CSV upload with per-row validation results | Import | 1 |
 | `/admin/business-units` | BUs, owner BU flag | Create, edit | 1 |
 | `/admin/settings` | All settings keys with current values | Edit | 1 |
 | `/admin/audit` | Audit log, filterable by entity, actor, date | — | 1 |
-| `/admin/deletions` | Deletion requests with ETA; power-off tasks | Complete deletion, complete power-off | 2 |
+| `/admin/deletions` | Deletion requests with ETA; power-off tasks (both done by hand in the dashboard) | Mark deleted, mark powered off | 2 |
 | `/reports` | Metrics per role (owner-BU, admin, managers for team) | Export | 3 |
