@@ -20,16 +20,33 @@ services:
       timeout: 3s
       retries: 20
 
+  pgbouncer:
+    image: edoburu/pgbouncer:v1.25.2-p0
+    restart: unless-stopped
+    environment:
+      DB_USER: ${POSTGRES_USER:-vm_portal}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB:-vm_portal}
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: 100
+      DEFAULT_POOL_SIZE: 20
+      AUTH_TYPE: any
+    depends_on:
+      db:
+        condition: service_healthy
+
   app:
     build:
       context: .
       dockerfile: docker/Dockerfile
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-vm_portal}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-vm_portal}
+      DATABASE_URL: postgres://${POSTGRES_USER:-vm_portal}:${POSTGRES_PASSWORD}@pgbouncer:5432/${POSTGRES_DB:-vm_portal}
     depends_on:
-      db:
-        condition: service_healthy
+      pgbouncer:
+        condition: service_started
 
 volumes:
   db-data:

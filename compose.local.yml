@@ -25,3 +25,7 @@ services:
     restart: unless-stopped
     ports:
       - "8025:8025"
+
+  pgbouncer:
+    ports:
+      - "6432:5432"

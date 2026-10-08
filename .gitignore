@@ -20,9 +20,23 @@
 # production
 /build
 
-# misc
+# misc & OS
 .DS_Store
+._*
+Thumbs.db
 *.pem
+
+# IDEs and editors
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+*.swp
+*.swo
+
+# build & test caches
+.turbo/
+.vitest/
 
 # debug
 npm-debug.log*

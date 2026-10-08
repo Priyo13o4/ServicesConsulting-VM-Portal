@@ -1,6 +1,6 @@
 # VM Portal
 
-Internal portal for requesting and managing VMware VMs. Rules for contributors and AI agents are in `AGENTS.md`; business rules in `docs/domain.md`.
+Internal portal for requesting and managing VMware VMs. Rules for contributors and AI agents are in `AGENTS.md`; business rules in `docs/domain.md`; file placement and architecture guide in `docs/codebase-structure.md`.
 
 ## Requirements
 
