@@ -1,88 +1,68 @@
-%% VM Portal - Request and Lifecycle Workflow (v2)
-%% Green = added or changed vs v1. Yellow = sub-process (see linked diagram).
-%% All VM work (create, power off, power on, delete) is done by hand in the vCloud dashboard; the portal records it.
+%% VM Portal - Request and Lifecycle Workflow (v3)
+%% All VM work (create, restart, revert, delete) is done by hand in the vCloud dashboard; the portal records it.
+%% Yellow = sub-process in another diagram. Blue = Phase 2.
 flowchart TD
     Start(["Employee opens portal"]) --> Auth[["Login + session check<br/>(Diagram 3)"]]
     Auth --> Role{"Identify user role"}
     Role -->|End User| EUD["End-User Dashboard"]
     Role -->|Manager| MD["Manager Dashboard"]
-    Role -->|vCloud Admin| VD["vCloud Operations Dashboard"]
+    Role -->|vCloud Admin| VD[["vCloud Admin Queue<br/>(Diagram 5)"]]
 
-    %% ---------- Request creation ----------
-    EUD --> NewReq["Create New VM Request"]
-    MD --> ForEmp["Create VM Request<br/>for self or team member"]
-    NewReq --> Req["Enter business and technical requirements"]
-    ForEmp --> Req
-    Req --> Valid{"Request information valid?"}
+    %% ---------- Request ----------
+    EUD --> Req["Fill request form<br/>reason, project, customer, product stack,<br/>number of VMs, vApp, OS, CPU, RAM, storage,<br/>backup owner, optional custom credentials"]
+    MD --> ForEmp["Request for self or a team member"] --> Req
+    Req --> Valid{"Form valid?"}
     Valid -->|No| ValErr["Show validation errors"] --> Req
-    Valid -->|Yes| Submit["Submit Request<br/>Status: SUBMITTED"]
-    Submit -.->|"Requester cancels before decision"| Cancel["Status: CANCELLED"] --> Closed1(["Request Closed"])
-    Submit --> Appr1[["Approval Routing + Escalation<br/>(Diagram 2)"]]
+    Valid -->|Yes| Submit["Submit<br/>Status: SUBMITTED"]
+    Submit -.->|"Requester cancels before decision"| Cancel["Status: CANCELLED"] --> Closed1(["Request closed"])
+    Submit --> Appr1[["Approval routing + urgent follow-up<br/>(Diagram 2)"]]
     Appr1 -->|"Returned for correction"| Corr["Category, comment, fields to update,<br/>resubmit-by date<br/>Status: RETURNED - Needs correction"] --> Upd["Requester updates request"] --> Submit
-    Appr1 -->|"Rejected or timed out"| Rej["Category + comment<br/>Status: REJECTED<br/>Rejection email to requester"] --> Closed1
-    Appr1 -->|Approved| Approved["Status: APPROVED"]
+    Appr1 -->|"Rejected or timed out"| Rej["Category + comment<br/>Status: REJECTED<br/>Rejection email"] --> Closed1
+    Appr1 -->|"Approved, or approved on behalf<br/>by a vCloud admin"| Approved["Status: APPROVED"]
 
-    %% ---------- Manual VM creation by vCloud admins ----------
-    Approved --> Kind{"New VM or existing VM?"}
-    Kind -->|"Existing VM offered by approver"| HQueue["Handover task in vCloud queue<br/>Current owner notified"]
-    HQueue --> Reset["vCloud admin resets access by hand<br/>in the vCloud dashboard"]
-    Reset --> Handed["Ownership moves to requester<br/>E = handover date + lease<br/>Status: COMPLETED"]
+    %% ---------- Manual creation ----------
+    Approved --> Kind{"New VMs or existing VM?"}
+    Kind -->|"Existing VM offered by approver"| HQ["Handover item in admin queue"]
+    HQ --> Reset["Admin resets access by hand<br/>and records new credentials"]
+    Reset --> Handed["Requester becomes owner<br/>new 90-day cycle<br/>Status: COMPLETED"]
     Handed --> Active
-    Kind -->|"New VM"| Queue["Add to vCloud creation queue<br/>Notify vCloud team"]
-    VD -.->|"works the queue"| Queue
-    Queue --> Assign["Assign request to engineer"]
-    Assign --> Feas["Technical and capacity validation"]
-    Feas --> FeasD{"Can it be created?"}
-    FeasD -->|"More information required"| MoreInfo["Request additional information<br/>Notify requester and manager"] --> InfoGiven["Requester provides information"] --> Feas
-    FeasD -->|No| TechRej["Record failure category,<br/>resources short, details"] --> NotifyFail["Notify requester and manager"] --> Closed2(["Request Closed"])
-    FeasD -->|Yes| CStart["Engineer marks it started<br/>Status: CREATION_IN_PROGRESS"]
-    CStart --> Manual["Engineer creates the VM by hand<br/>in the vCloud dashboard"]
-    Manual --> Created{"VM created?"}
-    Created -->|"Not yet: waiting on capacity or network"| Hold["On hold: reason + expected date<br/>Requester notified"] --> Manual
-    Created -->|"No: cannot be created"| TechRej
-    Created -->|Yes| Record["Engineer enters VM details in the portal<br/>hostname, IP, specs, actual creation date"]
-    Record --> SetExp["Set owner and expiry<br/>E = actual creation date + lease"]
-    SetExp --> Active["Status: ACTIVE<br/>Notify requester and manager<br/>VM visible in My VMs"]
+    Kind -->|"New VMs"| Queue["Create item in admin queue"]
+    VD -.->|"Assign to me"| Queue
+    Queue --> CStart["Admin marks it started<br/>Status: CREATION_IN_PROGRESS"]
+    CStart --> Manual["Admin creates the VMs by hand<br/>in the vCloud dashboard, inside a vApp"]
+    Manual --> Created{"VMs created?"}
+    Created -->|"No, e.g. storage full"| TechRej["Reject with comment<br/>Status: REJECTED"] --> Closed2(["Request closed"])
+    Created -->|Yes| Record["Admin records per VM: vApp, IP, OS, specs,<br/>creation date, username, password<br/>defaults: Administrator or root + default password"]
+    Record --> Active["Status: COMPLETED<br/>VMs ACTIVE, 90-day cycle starts<br/>VM-ready email: IP, username, link"]
 
-    %% ---------- Expiry monitoring ----------
+    %% ---------- 90-day cycle (Phase 2) ----------
     Active --> Monitor["Daily lifecycle job"]
-    Monitor --> Due{"Notice due today?<br/>E-10 / E-3 / E-1"}
-    Due -->|No| ExpD{"Expiry date reached?"}
-    ExpD -->|No| Monitor
-    Due -->|Yes| Notice["Send expiry notice<br/>Extend / Release links - login required"]
-    Notice --> Act{"Employee action"}
-    Act -->|"No response"| ExpD
-    ExpD -->|Yes| Expired["Status: EXPIRED<br/>Power-off task for vCloud team<br/>done by hand in the dashboard"]
-    Expired --> Grace["Grace notices at E+5 and E+10<br/>CC manager"]
-    Grace --> GraceAct{"Employee action during grace"}
-    GraceAct -->|"No response"| Final["E+15: final notice<br/>Auto-create deletion request"]
+    Monitor --> Due{"Notice due?<br/>S-10 / S-3 / S-1"}
+    Due -->|Yes| Notice["Notice to owner + backup owner:<br/>renew or release"] --> Act{"Owner action"}
+    Due -->|No| SDay{"Day 90 reached?"}
+    Act -->|"No response"| SDay
+    SDay -->|No| Monitor
+    SDay -->|Yes| Susp["Status: SUSPENDED<br/>vCloud suspends the VM"]
+    Susp --> Grace["Grace notices at S+5, S+10<br/>manager copied"]
+    Grace --> GAct{"Owner action during grace"}
+    GAct -->|"No response by S+15"| Final["Final notice: permanently deleted,<br/>no archive<br/>DELETE request created"]
 
-    %% ---------- Extension ----------
-    Act -->|"Request extension"| ExtForm["Enter extension period and reason<br/>Status: EXTENSION_PENDING<br/>Notices paused, VM left as-is"]
-    GraceAct -->|"Request extension"| ExtForm
-    ExtForm --> Appr2[["Approval Routing + Escalation<br/>(Diagram 2)"]]
-    Appr2 -->|"Rejected or timed out"| ExtRej["Notify employee and manager"]
-    Appr2 -->|Approved| ExtVal["vCloud team validates extension"]
-    ExtVal --> ExtOK{"Extension allowed?"}
-    ExtOK -->|No| ExtTechRej["Reject with technical reason"] --> ExtRej
-    ExtRej --> Resume["Notices resume on original expiry<br/>Deletion no earlier than rejection + 5 days"] --> Monitor
-    ExtOK -->|Yes| ExtUpd["New expiry = old expiry + extension<br/>Cycle + 1, notices resume<br/>If in grace: admin powers it back on<br/>Record extension history"]
-    ExtUpd --> ExtNotify["Notify employee and manager"] --> Monitor
+    Act -->|Renew| Renew["RENEW request<br/>Status: RENEWAL_PENDING<br/>notices paused"]
+    GAct -->|Renew| Renew
+    Renew --> Appr2[["Approval routing<br/>(Diagram 2)"]]
+    Appr2 -->|Approved| Restart["Admin restarts the VM by hand<br/>and records the restart date"]
+    Restart --> NewCycle["Status: ACTIVE<br/>new 90-day cycle from restart date"] --> Monitor
+    Appr2 -->|"Rejected or timed out"| RenRej["Owner notified, schedule resumes<br/>deletion no earlier than rejection + 5 days"] --> Monitor
 
-    %% ---------- Release and deletion ----------
-    Act -->|"No longer required"| Confirm["Warning: VM and all data permanently deleted<br/>User types hostname to confirm"]
-    GraceAct -->|"No longer required"| Confirm
-    Confirm --> DelReq["Create deletion request<br/>Status: PENDING_DELETION<br/>Show deletion ETA"]
+    Act -->|Release| Confirm["Owner types the IP to confirm:<br/>permanent deletion, no archive"]
+    GAct -->|Release| Confirm
+    Confirm --> DelReq["DELETE request with ETA<br/>Status: PENDING_DELETION"]
     Final --> DelReq
-    DelReq --> DelQueue["Deletion queue<br/>Notify vCloud team"]
-    VD -.->|"works the queue"| DelQueue
-    DelQueue --> RetD{"Data retention required by policy?"}
-    RetD -->|Yes| Archive["Archive data per retention policy"] --> Delete
-    RetD -->|No| Delete["vCloud admin powers off and deletes<br/>the VM by hand in the dashboard"]
-    Delete --> Decom["Admin marks it deleted in the portal<br/>Status: DELETED<br/>Record actual deletion date vs ETA<br/>Notify employee and manager"]
-    Decom --> Done(["VM Lifecycle Completed"])
+    DelReq --> DQ["Delete item in admin queue"]
+    DQ --> HardDel["Admin hard-deletes the VM by hand<br/>in the vCloud dashboard"]
+    HardDel --> Deleted["Status: DELETED<br/>owner, backup owner, manager notified"] --> Done(["VM lifecycle complete"])
 
-    classDef new fill:#dff5e3,stroke:#2e7d32,color:#1b3d20
     classDef sub fill:#fff4d6,stroke:#b7791f,color:#5c3d00
-    class Auth,Appr1,Appr2 sub
-    class Kind,HQueue,Reset,Handed,Hold,TechRej,Corr,Rej,CStart,Manual,Created,Record,ForEmp,Cancel,Monitor,Due,Notice,Expired,Grace,GraceAct,Final,ExtForm,ExtRej,Resume,ExtUpd,Confirm,DelReq,RetD,Decom new
+    classDef p2 fill:#e3eefc,stroke:#3b6db3,color:#14325e
+    class Auth,Appr1,Appr2,VD sub
+    class Monitor,Due,Notice,Act,SDay,Susp,Grace,GAct,Final,Renew,Restart,NewCycle,RenRej,Confirm,DelReq,DQ,HardDel,Deleted p2

@@ -28,13 +28,14 @@ Signed-out users hitting any portal page are redirected to `/login` (optimistic 
 
 | Route | Who | Shows | Actions | Phase |
 |---|---|---|---|---|
-| `/dashboard` | All | Role-based cards: my VMs expiring soon, my open requests; managers: pending approvals + team confirmations; admins: queue counts | Links into each list | 1 |
-| `/requests/new` | All | Request form; profile fields read-only; "on behalf of" for managers | Submit | 1 |
+| `/dashboard` | All | Role-based cards: my VMs suspending soon, my open requests and tickets; managers: pending approvals + team confirmations; admins: queue counts (unassigned, mine, escalated) | Links into each list | 1 |
+| `/requests/new` | All | Request form (`docs/domain.md`): profile fields read-only, number of VMs, optional existing vApp, optional custom credentials; "on behalf of" for managers | Submit | 1 |
 | `/requests` | All | My requests with status | Open one | 1 |
-| `/requests/[id]` | Requester, approvers, owner-BU, admin | Details, approval chain, timeline (status changes + comments). When `RETURNED`: "Needs correction", the comment, resubmit-by date, and the fields to update highlighted. On hold: reason and expected date | Edit (when `RETURNED`), cancel, comment; approver: decide; admin: queue actions | 1 |
-| `/vms` | All (scoped) | VMs with status, expiry, owner, "available for reuse" badge; managers toggle Mine / Team; owner-BU and admin see all with BU filter; filter "Available for reuse" | Open one, CSV export, mark available for reuse | 1 |
-| `/vms/[id]` | Owner, backup owner, manager, owner-BU, admin | Details, expiry, access note, history | Admin: update details, transfer owner. Phase 2: extend, release | 1 |
-| `/approvals` | MANAGER, OWNER_BU_MANAGER, VCLOUD_ADMIN | Pending approvals assigned to me. On each request: a "Similar VMs in your team" panel (hostname, owner, specs vs requested, environment, OS, expiry, reuse badge) | Approve, approve with an existing VM, reject (category + comment), return (category, comment, fields to update, resubmit-by) | 1 |
+| `/requests/[id]` | Requester, approvers, owner-BU, admin | Details, approval chain, timeline. When `RETURNED`: "Needs correction", the comment, resubmit-by date, fields to update highlighted. Escalation flag if sent | Edit (when `RETURNED`), cancel, comment, **urgent follow-up to vCloud** (when `PENDING_APPROVAL`: priority + comment); approver: decide; admin: queue actions | 1 |
+| `/vms` | All (scoped) | VMs with IP, vApp, owner, OS, specs, status, suspension date, reuse badge. Search by IP, owner name, employee ID, email; filter by vApp, status, BU, environment, available for reuse. Managers toggle Mine / Team (team is read-only) | Open one, CSV export | 1 |
+| `/vms/[id]` | Owner, backup owner, manager (read-only), owner-BU, admin | Details, vApp, cycle and suspension date, history; access details with "Reveal password" (owner, backup owner, admin) | Owner: mark available for reuse, raise snapshot-revert ticket. Phase 2: renew (owner, backup owner), release (owner only). Admin: update details, transfer owner | 1 |
+| `/tickets` | All | My support tickets with status | Raise ticket (snapshot revert: VM, snapshot, priority, comment, data-loss confirmation), cancel while open | 1 |
+| `/approvals` | MANAGER, OWNER_BU_MANAGER, VCLOUD_ADMIN | Pending approvals assigned to me. Single-VM requests show a "Similar VMs available" panel (IP, owner, specs vs requested, environment, OS, suspension date) | Approve, approve with an existing VM, reject (category + comment), return (category, comment, fields to update, resubmit-by) | 1 |
 | `/team` | MANAGER, OWNER_BU_MANAGER | My reports; pending "confirm team member" requests | Confirm, "not my report" | 1 |
 | `/profile` | All | My details (read-only: email, employee ID, BU, manager) | Change password. Phase 2: out-of-office delegate | 1 |
 
@@ -42,12 +43,12 @@ Signed-out users hitting any portal page are redirected to `/login` (optimistic 
 
 | Route | Shows | Actions | Phase |
 |---|---|---|---|
-| `/admin/queue` | Queue: `APPROVED`, `CREATION_IN_PROGRESS`, each marked Create or Handover, with on-hold badge. All VM work is done by hand in the vCloud dashboard | Assign, mark started, put on hold / clear hold, request info, reject (failure category + details), complete with VM details, complete handover | 1 |
+| `/admin/queue` | One queue: Create, Handover, Renew, Delete, Escalated follow-ups, Tickets. Each row: kind, priority, requester, age, assignee ("Handled by …"). Tabs: Unassigned, Mine, All | Assign to me, take over, open item | 1 |
+| `/admin/queue/[kind]/[id]` | The item in full; for creation: the per-VM completion form with username/password prefilled by OS (or the requester's custom values) | Create: start, reject (comment), complete (per-VM details, vApp pick/create). Handover: complete. Escalated: approve on behalf (reason) or decline. Ticket: start, resolve, reject. Phase 2: complete renewal (restart date), complete deletion | 1 |
 | `/admin/users` | Tabs: All users, Activation queue | Invite, import CSV, activate, change role, change manager/BU, deactivate (with VM transfer), reactivate, resend invite | 1 |
 | `/admin/approvals` | All pending approvals with age | Reassign (reason required) | 1 |
-| `/admin/vms/import` | CSV upload with per-row validation results | Import | 1 |
-| `/admin/business-units` | BUs, owner BU flag | Create, edit | 1 |
-| `/admin/settings` | All settings keys with current values | Edit | 1 |
+| `/admin/vms/import` | CSV upload (vApp, IP, owner, OS, specs, creation or last restart date) with per-row results | Import | 1 |
+| `/admin/business-units` | BUs, owner BU flag, BU lead | Create, edit | 1 |
+| `/admin/settings` | All settings keys, incl. default usernames and default VM password (masked) | Edit | 1 |
 | `/admin/audit` | Audit log, filterable by entity, actor, date | — | 1 |
-| `/admin/deletions` | Deletion requests with ETA; power-off tasks (both done by hand in the dashboard) | Mark deleted, mark powered off | 2 |
 | `/reports` | Metrics per role (owner-BU, admin, managers for team) | Export | 3 |

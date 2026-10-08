@@ -1,40 +1,51 @@
-%% VM Portal - Approval Routing + Escalation (used by CREATE and EXTEND requests)
-%% All day counts live in the settings table - defaults shown.
+%% VM Portal - Approval Routing, Urgent Follow-up and SLA (CREATE and RENEW requests)
+%% Day counts and external_bu_mode live in settings. Blue = Phase 2.
 flowchart TD
-    In(["CREATE or EXTEND request submitted"]) --> SameBU{"Requester's BU = owner BU?"}
+    In(["CREATE or RENEW request submitted"]) --> SameBU{"Requester's BU = owner BU?"}
     SameBU -->|Yes| SameMgr{"Requester is a manager?"}
-    SameMgr -->|Yes| Auto["Auto-approved<br/>Audit log: rule = same-BU manager"] --> OK(["APPROVED"])
-    SameMgr -->|No| C1["Approval chain:<br/>1. Line manager"]
+    SameMgr -->|Yes| Auto["Auto-approved<br/>audit: same-BU manager"] --> OK(["APPROVED"])
+    SameMgr -->|No| C1["Chain: 1. line manager"]
     SameBU -->|No| ExtMgr{"Requester is a manager?"}
-    ExtMgr -->|Yes| C2["Approval chain:<br/>1. Owner-BU manager group"]
-    ExtMgr -->|No| C3["Approval chain:<br/>1. Line manager<br/>2. Owner-BU manager group"]
+    ExtMgr -->|Yes| C2["Chain: 1. owner-BU group"]
+    ExtMgr -->|No| C3["Chain: 1. line manager<br/>2. owner-BU group"]
+    C2 --> Mode
+    C3 --> Mode{"external_bu_mode (Q3)"}
+    Mode -->|APPROVE| Step
+    Mode -->|NOTIFY| Strip["Drop the owner-BU step<br/>email the group instead"] --> Left{"Any steps left?"}
+    Left -->|No| OK
+    Left -->|Yes| Step
     C1 --> Step
-    C2 --> Step
-    C3 --> Step
 
-    %% ---------- Who actually gets it ----------
+    %% ---------- Who gets it ----------
     Step["Take next step in chain"] --> Resolve{"Resolve approver"}
-    Resolve -->|"Available"| Pend
-    Resolve -->|"Active out-of-office delegation"| Deleg["Route to delegate<br/>Original approver can still act"] --> Pend
-    Resolve -->|"No manager on record,<br/>approver deactivated,<br/>or approver = requester"| FB["Route to fallback:<br/>owner-BU manager group<br/>(group empty: vCloud admin)"] --> Pend
+    Resolve -->|Available| Pend
+    Resolve -->|"Out-of-office delegation"| Deleg["Route to delegate<br/>original approver can still act"] --> Pend
+    Resolve -->|"No manager on record,<br/>approver deactivated,<br/>or approver = requester"| FB["Fallback: owner-BU group<br/>(group empty: vCloud admin)"] --> Pend
 
-    Pend["Status: PENDING_APPROVAL<br/>Notify approver, start SLA clock"] --> Dec{"Decision"}
-    Dec -->|"Approve"| More{"More steps in chain?"}
-    Dec -->|"Approve with existing VM"| Offer["Pick a similar VM from the panel<br/>Current owner notified"] --> More
+    Pend["Status: PENDING_APPROVAL<br/>notify approver"] --> Dec{"Decision"}
+    Dec -->|Approve| More{"More steps?"}
+    Dec -->|"Approve with existing VM<br/>(single-VM requests)"| Offer["Pick a similar VM: marked available<br/>for reuse, or the approver's own"] --> More
     More -->|Yes| Step
     More -->|No| OK
     Dec -->|Reject| NO(["REJECTED<br/>category + comment"])
-    Dec -->|"Return for correction"| RET(["RETURNED to requester<br/>category, comment, fields, resubmit-by"])
+    Dec -->|"Return for correction"| RET(["RETURNED<br/>category, comment, fields, resubmit-by"])
 
-    %% ---------- Manager not available ----------
-    Dec -->|"No decision"| R1["Business day 2:<br/>Reminder to approver"]
-    R1 -->|"Still no decision"| R2["Business day 4: escalate<br/>Line-manager step: owner-BU group<br/>Owner-BU step: vCloud admin<br/>Notify requester"]
-    R2 -->|"Still no decision"| R3["Business day 7:<br/>Status: TIMED_OUT"]
-    R1 -.->|"Decision made"| Dec
-    R2 -.->|"Decision made by anyone eligible"| Dec
+    %% ---------- Manager unavailable: urgent follow-up ----------
+    Pend -.->|"Manager unavailable,<br/>VM needed now"| Urg["Requester sends urgent follow-up<br/>priority + comment"]
+    Urg --> AQ["Escalated item in the vCloud admin queue<br/>an admin assigns it to themselves"]
+    AQ --> Verify{"Admin verifies<br/>with the manager or BU lead"}
+    Verify -->|"Approve on behalf"| OBO["Reason recorded<br/>manager notified"] --> OK
+    Verify -->|Decline| Back["Comment to requester<br/>request stays with the manager"] --> Pend
+
+    %% ---------- SLA ladder ----------
+    Dec -->|"No decision"| R1["Business day 2:<br/>reminder to approver"]
+    R1 --> R2["Business day 4: escalate<br/>line-manager step: owner-BU group<br/>owner-BU step: vCloud admin"]
+    R2 --> R3["Business day 7:<br/>Status: TIMED_OUT"]
     R3 --> TO{"Request type"}
     TO -->|CREATE| TOC(["Closed: requester may resubmit"])
-    TO -->|EXTEND| TOE(["Treated as REJECTED:<br/>notices resume"])
+    TO -->|RENEW| TOE(["Treated as rejected:<br/>schedule resumes"])
 
-    classDef new fill:#dff5e3,stroke:#2e7d32,color:#1b3d20
-    class Offer,Resolve,Deleg,FB,R1,R2,R3,TO,TOC,TOE new
+    classDef p2 fill:#e3eefc,stroke:#3b6db3,color:#14325e
+    classDef urgent fill:#fde8e8,stroke:#b42318,color:#5c1111
+    class Deleg,R1,R2,R3,TO,TOC,TOE p2
+    class Urg,AQ,Verify,OBO,Back urgent

@@ -1,0 +1,28 @@
+%% VM Portal - Admin Queue (assign to me) and Support Tickets (snapshot revert)
+flowchart TD
+    T0(["Owner or backup owner opens a VM"]) --> TForm["Raise snapshot-revert ticket<br/>snapshot name or latest, priority, comment,<br/>confirm later changes are lost"]
+    TForm --> TOpen["Ticket: OPEN<br/>no approval needed"]
+    TOpen -.->|"Requester cancels"| TCan(["Ticket: CANCELLED"])
+    TOpen --> Q
+    ReqIn(["Approved create, handover,<br/>renew or delete request"]) --> Q
+    EscIn(["Urgent follow-up<br/>(Diagram 2)"]) --> Q
+
+    Q["Admin queue<br/>tabs: Unassigned, Mine, All<br/>each row: kind, priority, age, assignee"] --> Who{"Assigned?"}
+    Who -->|"No one"| Claim["Assign to me<br/>(acting on it also assigns it)"] --> Work
+    Who -->|"Me"| Work["Work the item"]
+    Who -->|"Another admin"| Other{"Take over?"}
+    Other -->|No| Wait(["Shows: Handled by name"])
+    Other -->|Yes| TakeOver["Confirm; audited;<br/>previous assignee notified"] --> Work
+
+    Work --> Kind{"Item kind"}
+    Kind -->|Ticket| TStart["Ticket: IN_PROGRESS"]
+    TStart --> TRev["Admin reverts the snapshot by hand<br/>in the vCloud dashboard"]
+    TRev --> TDone{"Reverted?"}
+    TDone -->|Yes| TRes["Ticket: RESOLVED<br/>comment to requester"]
+    TDone -->|"Cannot be done"| TRej["Ticket: REJECTED<br/>comment to requester"]
+    Kind -->|"Create, handover,<br/>renew, delete"| ReqWork["Follow Diagram 1"]
+    Kind -->|"Escalated follow-up"| EscWork["Verify, then approve on behalf<br/>or decline (Diagram 2)"]
+    TRes --> Close(["Closing updates status, records,<br/>notifications and audit in one step"])
+    TRej --> Close
+    ReqWork --> Close
+    EscWork --> Close
