@@ -1,0 +1,15 @@
+# Production smoke test on your machine: the real production build, local settings.
+services:
+  migrate:
+    env_file: .env.local
+
+  app:
+    env_file: .env.local
+    ports:
+      - "3000:3000"
+
+  mailpit:
+    image: axllent/mailpit:v1.31.1
+    restart: unless-stopped
+    ports:
+      - "8025:8025"

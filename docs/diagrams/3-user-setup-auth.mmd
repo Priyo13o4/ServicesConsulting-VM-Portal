@@ -1,0 +1,50 @@
+%% VM Portal - User Setup and Authentication (v2: Better Auth + Drizzle, no SSO)
+%% UC numbers match the Locked Plan doc.
+flowchart TD
+    %% ---------- Admin-created users ----------
+    Seed(["UC-1 Seed script creates first vCloud admin"]) --> Org["UC-2 Admin creates BUs, marks owner BU<br/>Imports managers by CSV"]
+    Org --> Invited
+    AdminNew(["UC-7 Admin creates a single user<br/>or CSV import of existing VM owners"]) --> Invited["Account: INVITED<br/>BU, manager, role set by admin"]
+    Invited --> InvMail["Set-password email<br/>Link valid 72h"]
+    InvMail --> InvSet{"UC-3 Password set in time?"}
+    InvSet -->|"Expired"| Resend["Admin resends invite"] --> InvMail
+    InvSet -->|Yes| Act
+
+    %% ---------- Self-registration ----------
+    Open(["Employee opens portal"]) --> Sess{"Valid session?"}
+    Sess -->|Yes| StatusD
+    Sess -->|No| Login["Login page"]
+    Login -->|"UC-4 Register"| Reg["Name, company email, employee ID, password<br/>Pick BU, then manager from that BU"]
+    Reg --> Dom{"Company domain?<br/>Email and employee ID new?"}
+    Dom -->|"Matches a deactivated account"| Contact["Show: contact vCloud admin"]
+    Dom -->|"Invalid or duplicate"| Reg
+    Dom -->|Yes| Verify["Verification email<br/>Link valid 24h"]
+    Verify --> Ver{"Verified within 7 days?"}
+    Ver -->|"No"| Purge["Registration deleted"]
+    Ver -->|Yes| Pending["Account: PENDING_ACTIVATION<br/>Role: END_USER"]
+    Pending --> Listed{"Manager picked from list?"}
+    Listed -->|"My manager isn't listed"| AdminQ
+    Listed -->|Yes| MgrD{"UC-5 Manager decision"}
+    MgrD -->|Confirm| Act["Account: ACTIVE<br/>Notify user"]
+    MgrD -->|"Not my report"| AdminQ["UC-6 Admin activation queue<br/>Admin sets correct BU and manager"]
+    MgrD -->|"No action in 3 business days"| AdminQ
+    AdminQ --> Act
+
+    %% ---------- Sign in ----------
+    Login -->|"UC-8 Sign in"| Rate{"Rate limit hit?"}
+    Rate -->|Yes| Locked["Try again later<br/>Admin can unlock"]
+    Rate -->|No| Valid{"Credentials valid?"}
+    Valid -->|No| Login
+    Valid -->|Yes| StatusD{"Account status"}
+    StatusD -->|"PENDING_ACTIVATION"| Wait["Awaiting activation page"]
+    StatusD -->|DEACTIVATED| Deny["Access denied, sessions revoked"]
+    StatusD -->|ACTIVE| RoleD{"Role"}
+    RoleD -->|END_USER| EU["End-User Dashboard"]
+    RoleD -->|"MANAGER or OWNER_BU_MANAGER"| MG["Manager Dashboard"]
+    RoleD -->|VCLOUD_ADMIN| VA["vCloud Operations Dashboard"]
+
+    %% ---------- Password reset ----------
+    Login -->|"UC-9 Forgot password"| Reset["Reset email, single use, 1h"] --> NewPw["Set new password<br/>Revoke other sessions"] --> Login
+
+    classDef admin fill:#fff4d6,stroke:#b7791f,color:#5c3d00
+    class Seed,Org,AdminNew,Invited,InvMail,Resend,AdminQ admin

@@ -1,36 +1,61 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# VM Portal
 
-## Getting Started
+Internal portal for requesting and managing VMware VMs. Rules for contributors and AI agents are in `AGENTS.md`; business rules in `docs/domain.md`.
 
-First, run the development server:
+## Requirements
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- Docker Desktop (or Docker Engine + Compose v2)
+- Node 22.12+ on your machine, only for the `npm run …` shortcuts, typecheck and lint. The app itself runs in Docker.
+
+## First run (local)
+
+```sh
+cp .env.example .env.local        # then set BETTER_AUTH_SECRET and NEXT_SERVER_ACTIONS_ENCRYPTION_KEY
+npm install                       # for editor types, typecheck and lint
+npm run stack:local               # app on http://localhost:3000, Mailpit on http://localhost:8025
+npm run local:migrate             # in a second terminal
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Check http://localhost:3000/api/health returns `{"status":"ok"}`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Environments
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Environment | Where | Compose files | Env file | What runs |
+|---|---|---|---|---|
+| Local | Your machine | `compose.yml` + `compose.local.yml` | `.env.local` | `next dev` with hot reload (source mounted), Postgres on :5432, Mailpit |
+| Smoke | Your machine | `compose.yml` + `compose.release.yml` + `compose.smoke.yml` | `.env.local` | The real production build with local settings, Mailpit |
+| Dev | Shared dev server | `compose.yml` + `compose.release.yml` + `compose.deploy.yml` | `.env.deploy` (dev values) | Production build, nginx with TLS, real SMTP relay |
+| Prod | Production server | same as Dev | `.env.deploy` (prod values) | Same as Dev |
 
-## Learn More
+Dev and prod run identical files; only `.env.deploy` differs. Server-only settings are read at runtime, so the same build behaves correctly in each environment. Don't use `NEXT_PUBLIC_*` variables for environment-specific values: those are baked in at build time.
 
-To learn more about Next.js, take a look at the following resources:
+Run the smoke stack before every deploy. It's the same image the servers will run.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```sh
+npm run stack:down && npm run stack:smoke
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Deploy (dev or prod server)
 
-## Deploy on Vercel
+One-time setup on the server: clone the repo to `/opt/vm-portal`, create `.env.deploy` from `.env.example`, put the TLS certificate in `certs/fullchain.pem` and `certs/privkey.pem`, and add the backup cron line from `scripts/backup.sh`.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Each release:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```sh
+cd /opt/vm-portal
+git fetch --tags && git checkout <release-tag>
+docker compose --env-file .env.deploy -f compose.yml -f compose.release.yml -f compose.deploy.yml up -d --build
+```
+
+Migrations run automatically (the `migrate` service runs before the app starts). The app only starts when they succeed.
+
+## Backups
+
+`scripts/backup.sh` writes a compressed dump to `backups/` and keeps 14 days. To restore:
+
+```sh
+docker compose --env-file .env.deploy -f compose.yml -f compose.release.yml -f compose.deploy.yml exec -T db \
+  sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists' < backups/<file>.dump
+```
+
+Test a restore on the dev server before go-live.

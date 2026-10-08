@@ -1,0 +1,39 @@
+%% VM Portal - Approval Routing + Escalation (used by CREATE and EXTEND requests)
+%% All day counts live in the settings table - defaults shown.
+flowchart TD
+    In(["CREATE or EXTEND request submitted"]) --> SameBU{"Requester's BU = owner BU?"}
+    SameBU -->|Yes| SameMgr{"Requester is a manager?"}
+    SameMgr -->|Yes| Auto["Auto-approved<br/>Audit log: rule = same-BU manager"] --> OK(["APPROVED"])
+    SameMgr -->|No| C1["Approval chain:<br/>1. Line manager"]
+    SameBU -->|No| ExtMgr{"Requester is a manager?"}
+    ExtMgr -->|Yes| C2["Approval chain:<br/>1. Owner-BU manager group"]
+    ExtMgr -->|No| C3["Approval chain:<br/>1. Line manager<br/>2. Owner-BU manager group"]
+    C1 --> Step
+    C2 --> Step
+    C3 --> Step
+
+    %% ---------- Who actually gets it ----------
+    Step["Take next step in chain"] --> Resolve{"Resolve approver"}
+    Resolve -->|"Available"| Pend
+    Resolve -->|"Active out-of-office delegation"| Deleg["Route to delegate<br/>Original approver can still act"] --> Pend
+    Resolve -->|"No manager on record,<br/>approver deactivated,<br/>or approver = requester"| FB["Route to fallback:<br/>owner-BU manager group<br/>(group empty: vCloud admin)"] --> Pend
+
+    Pend["Status: PENDING_APPROVAL<br/>Notify approver, start SLA clock"] --> Dec{"Decision"}
+    Dec -->|Approve| More{"More steps in chain?"}
+    More -->|Yes| Step
+    More -->|No| OK
+    Dec -->|Reject| NO(["REJECTED"])
+    Dec -->|"Return for correction"| RET(["RETURNED to requester"])
+
+    %% ---------- Manager not available ----------
+    Dec -->|"No decision"| R1["Business day 2:<br/>Reminder to approver"]
+    R1 -->|"Still no decision"| R2["Business day 4: escalate<br/>Line-manager step: owner-BU group<br/>Owner-BU step: vCloud admin<br/>Notify requester"]
+    R2 -->|"Still no decision"| R3["Business day 7:<br/>Status: TIMED_OUT"]
+    R1 -.->|"Decision made"| Dec
+    R2 -.->|"Decision made by anyone eligible"| Dec
+    R3 --> TO{"Request type"}
+    TO -->|CREATE| TOC(["Closed: requester may resubmit"])
+    TO -->|EXTEND| TOE(["Treated as REJECTED:<br/>notices resume"])
+
+    classDef new fill:#dff5e3,stroke:#2e7d32,color:#1b3d20
+    class Resolve,Deleg,FB,R1,R2,R3,TO,TOC,TOE new

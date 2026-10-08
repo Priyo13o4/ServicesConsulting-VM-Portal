@@ -1,0 +1,27 @@
+# Local development: Next.js dev server with hot reload inside Docker,
+# source bind-mounted, emails caught by Mailpit (http://localhost:8025).
+services:
+  db:
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./docker/postgres-init:/docker-entrypoint-initdb.d:ro
+
+  app:
+    build:
+      target: dev
+    env_file: .env.local
+    environment:
+      WATCHPACK_POLLING: "true"
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/.next
+
+  mailpit:
+    image: axllent/mailpit:v1.31.1
+    restart: unless-stopped
+    ports:
+      - "8025:8025"

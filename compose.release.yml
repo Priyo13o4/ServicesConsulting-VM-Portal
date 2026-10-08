@@ -1,0 +1,27 @@
+# Production build: standalone Next.js server + one-shot migration job.
+# Shared by the smoke stack and the dev/prod servers.
+services:
+  migrate:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: runner
+    command: ["node", "dist-scripts/migrate.mjs"]
+    restart: "no"
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-vm_portal}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-vm_portal}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  app:
+    build:
+      target: runner
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6

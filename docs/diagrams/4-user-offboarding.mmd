@@ -1,0 +1,16 @@
+%% VM Portal - Deactivation and Manager/BU Change (manual, since there is no AD sync)
+flowchart TD
+    T(["Admin deactivates a user"]) --> V{"Owns active VMs?"}
+    V -->|Yes| VT["Transfer each VM to a new owner<br/>Default: line manager<br/>Blocking step"] --> R
+    V -->|No| R{"Has open requests?"}
+    R -->|Yes| RC["Cancel them<br/>Notify approvers"] --> A
+    R -->|No| A{"Holds pending approvals?"}
+    A -->|Yes| AR["Re-route to fallback approver<br/>(Diagram 2)"] --> D
+    A -->|No| D{"Has direct reports?"}
+    D -->|Yes| DR["Admin assigns a new manager<br/>to each report"] --> X
+    D -->|No| X["Revoke all sessions<br/>Status: DEACTIVATED<br/>Audit log entry"]
+    X --> Done(["Done"])
+
+    M(["Admin changes a user's manager or BU"]) --> MP["Re-route this user's pending<br/>approvals to the new approver"]
+    MP --> MB["Existing VMs keep their owner<br/>Reports show the new BU<br/>Approval rules re-evaluated on next request"]
+    MB --> Done

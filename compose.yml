@@ -1,0 +1,35 @@
+# Base stack shared by every environment. Always combined with an override:
+#   local:  compose.yml + compose.local.yml
+#   smoke:  compose.yml + compose.release.yml + compose.smoke.yml
+#   deploy: compose.yml + compose.release.yml + compose.deploy.yml   (dev and prod servers)
+name: vm-portal
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-vm_portal}
+      POSTGRES_USER: ${POSTGRES_USER:-vm_portal}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-vm_portal}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-vm_portal}
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  db-data:
